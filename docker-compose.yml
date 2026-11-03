@@ -1,0 +1,132 @@
+# EFDI TAK relay.
+#
+#   docker compose up -d                       the relay only (product)
+#   docker compose --profile demo up -d        + local router, live map, swarm-orbit scenario
+#   docker compose --profile edge up -d        + edge-AI demo node and synthetic camera
+#   docker compose --profile edge-api up -d    + HTTP <-> backbone gateway for the edge-AI demo
+#
+# Settings come from .env (copy .env.example). Certificates: ./certs (see README).
+
+x-fabric: &fabric
+  volumes:
+    - ./certs:/certs:ro
+  environment: &fabric-env
+    GOAT_CERT_DIR: /certs
+    GOAT_ORG: ${GOAT_ORG:-}
+    GOAT_ROUTER: ${GOAT_ROUTER:-tls/router.example:7447}
+    # used only when ./certs is empty (local demo without the mesh)
+    GOAT_LOCAL_ROUTER: tcp/zenoh-router:7447
+  extra_hosts:
+    # Docker Desktop containers cannot use NetBird's mesh DNS, so pin the router's mesh IP.
+    # Find it with: nslookup router.example (while NetBird is up).
+    - "router.example:${EFDI_ROUTER_IP:-100.64.0.1}"
+
+services:
+
+  # ── Product ────────────────────────────────────────────────────────────────
+  tak-relay:
+    <<: *fabric
+    build: {context: ., target: relay}
+    image: efdi-tak-relay:1.0.0
+    environment:
+      <<: *fabric-env
+      GATEWAY_SYSTEM: ${GATEWAY_SYSTEM:-tak-gateway}
+      GATEWAY_HTTP_PORT: "8088"
+      # Backbone -> TAK. host.docker.internal = the Docker host (127.0.0.1 would be the container).
+      TAK_UDP_TARGETS: ${TAK_UDP_TARGETS:-host.docker.internal:6969}
+      TAK_PORT: "8087"
+      # Convert every recognisable position message on the backbone, not only */tak/cot/v1/**.
+      GATEWAY_INGEST_ALL: ${GATEWAY_INGEST_ALL:-1}
+      # TAK -> backbone: friendly PLI (a-f-*) to <org>/tak/pli/v1/<uid>. Writes to the shared backbone.
+      TAK_INGEST: ${TAK_INGEST:-0}
+      TAK_UDP_IN_PORT: "6971"
+      # Backbone video -> RTSP -> TAK "Play Video". GATEWAY_VIDEO_HOST = address TAK clients use.
+      GATEWAY_VIDEO: ${GATEWAY_VIDEO:-0}
+      GATEWAY_VIDEO_HOST: ${GATEWAY_VIDEO_HOST:-127.0.0.1}
+      GATEWAY_VIDEO_PORT: "8554"
+    ports:
+      - "8087:8087"       # CoT TCP stream (ATAK/WinTAK "TAK Server -> TCP")
+      - "8088:8088"       # /healthz /metrics /status /streams
+      - "6971:6971/udp"   # CoT in from TAK clients (PLI ingest)
+      - "8554:8554"       # RTSP (GATEWAY_VIDEO=1)
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8088/healthz', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    restart: unless-stopped
+
+  # ── Demo (profile "demo") ──────────────────────────────────────────────────
+  zenoh-router:
+    profiles: ["demo"]
+    build: {context: ., target: demo}
+    command: python3 -u demo/local_router.py
+    ports:
+      - "7447:7447"
+    restart: unless-stopped
+
+  live-map:
+    <<: *fabric
+    profiles: ["demo"]
+    build: {context: ., target: demo}
+    command: python3 -u demo/live_map.py
+    environment:
+      <<: *fabric-env
+      GOAT_MAP_PORT: "8080"
+    ports:
+      - "8080:8080"       # map; /control = scenario panel
+    restart: unless-stopped
+
+  swarm-orbit:
+    <<: *fabric
+    profiles: ["demo"]
+    build: {context: ., target: demo}
+    command: python3 -u demo/scenarios/swarm_orbit.py
+    environment:
+      <<: *fabric-env
+      DRONE_COUNT: "4"
+    restart: unless-stopped
+
+  # ── Edge-AI demo (profiles "edge", "edge-api") ─────────────────────────────
+  edge-ai:
+    <<: *fabric
+    profiles: ["edge"]
+    build: {context: ., dockerfile: demo/edge_ai/Dockerfile}
+    command: python3 -u edge_node.py
+    environment:
+      <<: *fabric-env
+      EDGE_MODE: both               # imagery | telemetry | both
+      EDGE_NODE_ID: edge-ai-01
+      EDGE_DETECTOR: mock           # mock | onnx (set EDGE_MODEL=/models/x.onnx)
+      EDGE_CONF: "0.35"
+      EDGE_SYSTEM: edge-ai
+    volumes:
+      - ./certs:/certs:ro
+      - ./demo/edge_ai/models:/models:ro
+    restart: unless-stopped
+
+  frame-pub:
+    <<: *fabric
+    profiles: ["edge"]
+    build: {context: ., dockerfile: demo/edge_ai/Dockerfile}
+    command: python3 -u frame_publisher.py
+    environment:
+      <<: *fabric-env
+      EDGE_CAM_ID: eo-cam-01
+      EDGE_FRAME_FPS: "2"
+    restart: unless-stopped
+
+  edge-api:
+    <<: *fabric
+    profiles: ["edge-api"]
+    build: {context: ., dockerfile: demo/edge_ai/Dockerfile}
+    command: python3 -u api_gateway.py
+    environment:
+      <<: *fabric-env
+      EDGE_API_HOST: 0.0.0.0
+      EDGE_API_PORT: "8090"
+      EDGE_API_TOKEN: ${EDGE_API_TOKEN:-}
+    ports:
+      - "8090:8090"
+    restart: unless-stopped

@@ -1,0 +1,72 @@
+asyncapi: 2.6.0
+info:
+  title: EFDI TAK Gateway and Edge-AI
+  version: 1.0.0
+  description: |
+    Bridges the EFDI backbone and TAK. Reads every recognisable positional message on the backbone
+    and forwards it to TAK as CoT 2.0; publishes friendly position reports from our TAK clients
+    back to the backbone; publishes a heartbeat for each running system.
+    Conventions: time RFC 3339 UTC (Z); WGS84 degrees; altitude height above ellipsoid (hae, metres);
+    distances/errors in metres; delivery at-least-once; there is no delete message (markers go stale).
+servers:
+  goat:
+    url: tls/router.example:7447
+    protocol: zenoh
+    description: mTLS; writes limited to our org prefix.
+channels:
+  "{org}/{system}/heartbeat/v1":
+    description: "Mandatory liveness heartbeat for systems tak-gateway and edge-ai (60 s). status reflects a real health check: ok | degraded."
+    parameters: {org: {schema: {type: string}}, system: {schema: {type: string, enum: [tak-gateway, edge-ai]}}}
+    publish:
+      message:
+        name: SystemHeartbeat
+        payload:
+          type: object
+          required: [key, system, status, version, sent_at, seq, interval_seconds]
+          properties:
+            key: {type: string}
+            system: {type: string}
+            status: {type: string, enum: [ok, degraded]}
+            version: {type: string}
+            sent_at: {type: string, format: date-time}
+            seq: {type: integer, minimum: 1}
+            interval_seconds: {type: number, maximum: 900}
+  "{org}/tak/pli/v1/{uid}":
+    description: |
+      Friendly position reports (CoT type a-f-*) received from our TAK clients (TCP stream or UDP input of
+      the gateway). Tasking/ping events (t-*) and non-friendly types are not published. At most 1 update
+      per second per uid. The payload is the client's CoT event unchanged.
+    parameters: {org: {schema: {type: string}}, uid: {schema: {type: string}}}
+    publish:
+      message:
+        name: CotEvent
+        contentType: application/xml
+        payload: {type: string, description: "CoT 2.0 <event>"}
+  "{org}/exercise/{scenario}/v1/{uid}":
+    description: |
+      SIMULATED exercise injects from the demo scenarios (demo/sender.py). Not real reports. A CoT
+      marker for the same track is published to {org}/tak/cot/v1/EXERCISE.{uid} with an
+      "EXERCISE ..." callsign and remarks starting with SIMULATED.
+    parameters: {org: {schema: {type: string}}, scenario: {schema: {type: string}}, uid: {schema: {type: string}}}
+    publish:
+      message:
+        name: ExerciseTrack
+        contentType: application/json
+        payload:
+          type: object
+          required: [exercise, classification, scenario, source, lat, lon, seq, ts_ms]
+          properties:
+            exercise: {type: boolean, const: true}
+            classification: {type: string, const: SIMULATED}
+            label: {type: string}
+            scenario: {type: string}
+            source: {type: string}
+            lat: {type: number, minimum: -90, maximum: 90}
+            lon: {type: number, minimum: -180, maximum: 180}
+            alt: {type: number, description: metres}
+            heading: {type: number, description: degrees true}
+            speed_kmh: {type: number}
+            phase: {type: string}
+            lost: {type: boolean}
+            seq: {type: integer, minimum: 1}
+            ts_ms: {type: integer, description: Unix epoch milliseconds}

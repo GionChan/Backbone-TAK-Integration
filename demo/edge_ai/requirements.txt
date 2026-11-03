@@ -1,0 +1,5 @@
+eclipse-zenoh==1.9.0
+numpy>=1.26
+pillow>=10
+# optional real-model backend for EDGE_DETECTOR=onnx :
+# onnxruntime>=1.17

@@ -1,0 +1,171 @@
+source,lat,lon,alt,speed_kmh,heading,phase,delay_s
+#
+# MASSIIVINEN ILMAHYÖKKÄYS: LÄHTÖALUE → KOHDE
+# 25 kohdetta — 4 ryhmää — 6 vaihetta
+#
+# Ryhmä A: raid-cruise-01..05   — risteilyohjukset (nopea/korkea)
+# Ryhmä B: raid-drone-01..08    — itsemurhadroonit (hidas/matala)
+# Ryhmä C: raid-uav-01..07      — taktiset UAV:t (keski)
+# Ryhmä D: raid-low-01..05      — maastoa myötäilevät (erittäin matala)
+#
+# Reitti: lähtöalue (59.93°N 30.34°E) → kohde (61.06°N 28.19°E)
+# Etäisyys: ~172 km  |  Suunta: ~311°  |  Rajan ylitys: ~60.75°N 28.80°E
+#
+# ─────────────────────────────────────────────────────────────────
+# VAIHE 1 — Kontaktit havaittu lähtöalueella
+# ─────────────────────────────────────────────────────────────────
+#
+# Ryhmä A — risteilyohjukset
+raid-cruise-01,59.82,30.45,1200,850,311,ingress,0
+raid-cruise-02,59.90,30.38,1500,870,309,ingress,1
+raid-cruise-03,59.78,30.52,900,830,313,ingress,1
+raid-cruise-04,59.95,30.28,1100,855,310,ingress,1
+raid-cruise-05,59.86,30.41,1350,845,312,ingress,1
+#
+# Ryhmä B — itsemurhadroonit (viivästetty lähtö eri suunnista)
+raid-drone-01,59.70,30.60,180,195,312,ingress,2
+raid-drone-02,59.75,30.48,200,185,310,ingress,1
+raid-drone-03,59.65,30.70,160,210,315,ingress,1
+raid-drone-04,59.80,30.55,220,190,311,ingress,1
+raid-drone-05,59.72,30.42,150,205,309,ingress,1
+raid-drone-06,59.68,30.65,175,198,313,ingress,1
+raid-drone-07,59.76,30.35,190,215,307,ingress,1
+raid-drone-08,59.84,30.58,165,188,314,ingress,1
+#
+# Ryhmä C — taktiset UAV:t
+raid-uav-01,59.88,30.40,450,310,311,ingress,2
+raid-uav-02,59.82,30.50,380,295,312,ingress,1
+raid-uav-03,59.92,30.32,520,330,309,ingress,1
+raid-uav-04,59.78,30.44,410,315,313,ingress,1
+raid-uav-05,59.85,30.55,350,285,310,ingress,1
+raid-uav-06,59.96,30.48,480,340,308,ingress,1
+raid-uav-07,59.80,30.36,395,305,311,ingress,1
+#
+# Ryhmä D — maastoa myötäilevät (erittäin matala, tutkavarjo)
+raid-low-01,59.75,30.52,55,245,312,ingress,2
+raid-low-02,59.82,30.44,40,230,310,ingress,1
+raid-low-03,59.70,30.60,65,255,314,ingress,1
+raid-low-04,59.87,30.38,45,240,309,ingress,1
+raid-low-05,59.78,30.56,50,250,313,ingress,1
+#
+# ─────────────────────────────────────────────────────────────────
+# VAIHE 2 — ~60 km lähtöalueelta (30s kuluttua)
+# ─────────────────────────────────────────────────────────────────
+#
+raid-cruise-01,60.22,29.92,1200,850,311,ingress,30
+raid-cruise-02,60.29,29.87,1500,870,309,ingress,2
+raid-cruise-03,60.18,29.98,900,830,313,ingress,2
+raid-cruise-04,60.34,29.80,1100,855,310,ingress,2
+raid-cruise-05,60.25,29.90,1350,845,312,ingress,2
+raid-drone-01,60.07,30.10,180,195,312,ingress,2
+raid-drone-02,60.12,30.00,200,185,310,ingress,2
+raid-drone-03,60.02,30.18,160,210,315,ingress,2
+raid-drone-04,60.16,30.05,220,190,311,ingress,2
+raid-drone-05,60.09,29.95,150,205,309,ingress,2
+raid-drone-06,60.05,30.12,175,198,313,ingress,2
+raid-drone-07,60.13,29.88,190,215,307,ingress,2
+raid-drone-08,60.20,30.08,165,188,314,ingress,2
+raid-uav-01,60.25,29.95,450,310,311,ingress,2
+raid-uav-02,60.20,30.02,380,295,312,ingress,2
+raid-uav-03,60.30,29.88,520,330,309,ingress,2
+raid-uav-04,60.17,29.97,410,315,313,ingress,2
+raid-uav-05,60.23,30.06,350,285,310,ingress,2
+raid-uav-06,60.33,29.99,480,340,308,ingress,2
+raid-uav-07,60.19,29.91,395,305,311,ingress,2
+raid-low-01,60.10,30.08,55,245,312,ingress,2
+raid-low-02,60.17,30.00,40,230,310,ingress,2
+raid-low-03,60.05,30.15,65,255,314,ingress,2
+raid-low-04,60.22,29.94,45,240,309,ingress,2
+raid-low-05,60.14,30.10,50,250,313,ingress,2
+#
+# ─────────────────────────────────────────────────────────────────
+# VAIHE 3 — Rajan ylitys (~140 km, 30s kuluttua)
+# ─────────────────────────────────────────────────────────────────
+#
+raid-cruise-01,60.65,29.20,1200,850,308,ingress,30
+raid-cruise-02,60.72,29.12,1500,870,307,ingress,2
+raid-cruise-03,60.60,29.26,900,830,310,ingress,2
+raid-cruise-04,60.78,29.05,1100,855,308,ingress,2
+raid-cruise-05,60.68,29.18,1350,845,309,ingress,2
+raid-drone-01,60.42,29.55,180,195,311,ingress,2
+raid-drone-02,60.48,29.47,200,185,309,ingress,2
+raid-drone-03,60.38,29.62,160,210,313,ingress,2
+raid-drone-04,60.52,29.50,220,190,310,ingress,2
+raid-drone-05,60.44,29.42,150,205,308,ingress,2
+raid-drone-06,60.40,29.58,175,198,312,ingress,2
+raid-drone-07,60.49,29.36,190,215,306,ingress,2
+raid-drone-08,60.56,29.52,165,188,311,ingress,2
+raid-uav-01,60.62,29.28,450,310,309,ingress,2
+raid-uav-02,60.57,29.35,380,295,310,ingress,2
+raid-uav-03,60.68,29.20,520,330,307,ingress,2
+raid-uav-04,60.54,29.31,410,315,311,ingress,2
+raid-uav-05,60.60,29.40,350,285,309,ingress,2
+raid-uav-06,60.72,29.32,480,340,307,ingress,2
+raid-uav-07,60.56,29.24,395,305,310,ingress,2
+raid-low-01,60.44,29.52,55,245,311,ingress,2
+raid-low-02,60.52,29.44,40,230,309,ingress,2
+raid-low-03,60.39,29.60,65,255,313,ingress,2
+raid-low-04,60.58,29.38,45,240,308,ingress,2
+raid-low-05,60.47,29.50,50,250,312,ingress,2
+#
+# ─────────────────────────────────────────────────────────────────
+# VAIHE 4 — Ilmatorjunta iskee — osa kontakteista katoaa (10s)
+# ─────────────────────────────────────────────────────────────────
+#
+# Risteilyohjukset torjuttu (3/5)
+raid-cruise-02,0,0,0,0,0,lost,10
+raid-cruise-04,0,0,0,0,0,lost,2
+raid-cruise-05,0,0,0,0,0,lost,2
+#
+# Itsemurhadroonit torjuttu (4/8)
+raid-drone-03,0,0,0,0,0,lost,2
+raid-drone-05,0,0,0,0,0,lost,2
+raid-drone-07,0,0,0,0,0,lost,2
+raid-drone-08,0,0,0,0,0,lost,2
+#
+# UAV:t torjuttu (3/7)
+raid-uav-02,0,0,0,0,0,lost,2
+raid-uav-05,0,0,0,0,0,lost,2
+raid-uav-06,0,0,0,0,0,lost,2
+#
+# Matalat säilyvät (vaikea torjua)
+#
+# ─────────────────────────────────────────────────────────────────
+# VAIHE 5 — Jäljellä olevat lähestyvät kohdetta (20s)
+# ─────────────────────────────────────────────────────────────────
+#
+raid-cruise-01,60.95,28.42,1100,850,305,ingress,20
+raid-cruise-03,60.90,28.50,850,830,308,ingress,2
+raid-drone-01,60.76,28.80,165,195,308,ingress,2
+raid-drone-02,60.80,28.72,185,185,307,ingress,2
+raid-drone-04,60.74,28.85,205,190,309,ingress,2
+raid-drone-06,60.78,28.76,160,198,310,ingress,2
+raid-uav-01,60.88,28.55,420,310,307,ingress,2
+raid-uav-03,60.92,28.48,495,330,305,ingress,2
+raid-uav-04,60.86,28.60,385,315,308,ingress,2
+raid-uav-07,60.84,28.58,370,305,308,ingress,2
+raid-low-01,60.72,28.88,50,245,309,ingress,2
+raid-low-02,60.78,28.82,38,230,308,ingress,2
+raid-low-03,60.68,28.94,60,255,311,ingress,2
+raid-low-04,60.82,28.76,42,240,307,ingress,2
+raid-low-05,60.74,28.90,48,250,310,ingress,2
+#
+# ─────────────────────────────────────────────────────────────────
+# VAIHE 6 — ISKEVÄT KOHTEESEEN (15s)
+# ─────────────────────────────────────────────────────────────────
+#
+raid-cruise-01,61.06,28.19,950,850,302,orbit,15
+raid-cruise-03,61.05,28.22,800,830,305,orbit,3
+raid-drone-01,61.04,28.25,140,160,295,orbit,3
+raid-drone-02,61.07,28.17,170,150,305,orbit,3
+raid-drone-04,61.05,28.20,190,165,300,orbit,3
+raid-drone-06,61.06,28.23,155,172,298,orbit,3
+raid-uav-01,61.05,28.21,380,260,302,orbit,3
+raid-uav-03,61.07,28.18,450,285,300,orbit,3
+raid-uav-04,61.04,28.24,355,270,305,orbit,3
+raid-uav-07,61.06,28.20,345,255,303,orbit,3
+raid-low-01,61.03,28.26,48,180,298,orbit,3
+raid-low-02,61.05,28.22,35,165,303,orbit,3
+raid-low-03,61.02,28.28,58,190,295,orbit,3
+raid-low-04,61.07,28.18,40,175,305,orbit,3
+raid-low-05,61.04,28.24,45,182,300,orbit,3

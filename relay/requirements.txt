@@ -1,0 +1,5 @@
+# Runtime dependencies of the TAK relay. Only eclipse-zenoh is required.
+eclipse-zenoh==1.9.0
+# Optional: /streams preview of video and images (relay/stream_view.py). The relay runs without them.
+av==14.4.0
+pillow==11.3.0

@@ -1,0 +1,32 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unittest:
+    # Windows: field devices and the demo launcher; Linux: the Docker image.
+    # Both ship PowerShell, so the generated and demo .ps1 files are parsed on each.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r relay/requirements.txt
+
+      - name: Byte-compile everything
+        run: python -m compileall -q relay demo tools tests
+
+      - name: Run test suite
+        run: python -m unittest discover -s tests -v

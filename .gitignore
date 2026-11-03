@@ -1,0 +1,35 @@
+# Sertifikaatit ja avaimet — ei koskaan versionhallintaan
+certs/
+certs-efdi/
+*.pem
+*.p12
+*.cbor
+*.key
+
+# Laitepaketit (make_relay_package.py) — sisaltavat sertifikaatin + avaimen
+dist/
+
+# Ajoaikaiset lokit
+*.log
+*.log.err
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv
+
+# Zenoh-tilatiedostot
+.zenoh/
+
+# Editorit
+.vscode/
+*.swp
+~*
+
+# Claude Code -paikallisasetukset (koneessa olevia polkuja, ei jaettavaa)
+.claude/
+
+# Demo launcher logs
+logs/

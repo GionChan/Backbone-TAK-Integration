@@ -1,0 +1,23 @@
+# Vianetsintä
+
+**In English:** [../en/troubleshooting.md](../en/troubleshooting.md)
+
+Aloita komennolla `curl localhost:8088/status`: `reasons` kertoo, mikä on vialla, ja `counters`
+näyttää, minne viestit menevät (`*_in_total`, `*_sent_total`, `*_dropped_total{reason=…}`).
+
+| Oire | Todennäköinen syy | Korjaus |
+| --- | --- | --- |
+| `fabric link down`, `/healthz` 503 | Mesh alhaalla tai reititin ei vastaa | `netbird status`: Management ja Signal yhdistettyinä, nimipalvelimet 1/1. `goat doctor` |
+| Reitittimen nimi ei ratkea | Ei meshissä tai NetBirdin DNS ei ole käytössä | Yhdistä NetBird uudelleen. Docker Desktopissa aseta `EFDI_ROUTER_IP` (mesh-IP isännän `nslookup`-komennolla) |
+| Lokissa toistuu `fabric unavailable (…)` | Vanhentunut tai väärä sertifikaatti, väärä reititin | `goat profile show`; tarkista `certs/`-kansion bundle; aseta `GOAT_ROUTER` bundlen mukaan |
+| Päättyy virheeseen `cannot determine the org slot` | Sertifikaatin CN ei ole slot | Aseta `GOAT_ORG=<slotin tunniste>` |
+| `need exactly one … pair` tai bundlea ei löydy | Hakemistossa on useita identiteettejä | Pidä yksi sertifikaatti- ja avainpari hakemistoa kohden tai aseta `GOAT_CERT`/`GOAT_KEY`/`GOAT_CA` |
+| Julkaisu "onnistuu", mutta kukaan ei saa viestiä | Avain on oman slotin ulkopuolella (hylätään hiljaa) | Julkaise vain polkuun `<slot>/…`; tarkista komennolla `goat flow <avain>` |
+| `/status` terve, mutta TAK ei näytä mitään | Väärä UDP-kohde, palomuuri tai TAK-tulo pois päältä | Dockerissa käytä osoitetta `host.docker.internal`, ei `127.0.0.1`. Avaa TAK-tulon portti. Tarkista `gateway_output_sent_total` |
+| Merkit ilmestyvät ja katoavat | Lähde lähettää vanhentuneita aikaleimoja tai kello on väärässä | Tarkista `gateway_cot_dropped_total{reason="already-stale"}`; synkronoi kello (NTP) |
+| `no backbone samples for …` | Tilatuilla avaimilla ei julkaista mitään | `GATEWAY_INGEST_ALL=1` näyttää kaikki valmistajat; katso `/streams` |
+| ATAK-yhteys katkeaa | Asiakas ei lukenut dataa 10 sekuntiin | Tarkoituksellinen suojaus; tarkista asiakkaan verkko |
+| `port is already allocated` | Jokin muu prosessi käyttää porttia 8087, 8088, 6971, 8554, 8080 tai 7447 | Pysäytä se tai vaihda porttimäärityksen isäntäpuoli |
+| `PermissionError` avaimelle (Linux) | Kontti ajetaan käyttäjänä UID 10001 | `chmod 640` avaimelle ja lukuoikeus ryhmälle 10001, tai `user: "0"` palvelulle |
+| Heartbeat ei näy portaalissa | Järjestelmänimeä ei ole rekisteröity | `python tools/register_portal_topics.py --add-system <nimi> --apply` |
+| Kenttälaite: automaattinen käynnistys puuttuu | Ajastetut tehtävät estetty käytännöllä | Asennus käyttää silloin Käynnistys-kansiota; tarkista asennuksen tuloste |

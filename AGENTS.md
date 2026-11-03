@@ -1,0 +1,103 @@
+# AGENTS.md — EFDI TAK relay
+
+Machine-oriented guide for AI coding agents. Human docs: README.md (en), README.fi.md (fi),
+docs/en/, docs/fi/. When this file and the code disagree, the code wins; fix this file.
+
+## Purpose
+
+Two-way bridge: EFDI goat fabric (Zenoh 1.9.0, mTLS, NetBird mesh) <-> TAK clients (CoT 2.0 XML).
+Product = `relay/`. Everything in `demo/` is demonstration only.
+
+## Map
+
+```text
+relay/                  PRODUCT. Must not import from demo/ or tools/.
+  tak_gateway.py        entry point; subscriptions, outputs, PLI ingest, HTTP ops, watchdog
+  goat_connect.py       make_config() -> (zenoh.Config, is_real); ORG, KEY_PREFIX, ROUTER, LOCAL_ROUTER
+  identity.py           bundle + org slot discovery; stdlib only (imported by tools/ without zenoh)
+  backbone_cot.py       vendor format detection -> CoT; make_cot()
+  cot_guard.py          validate_cot(), RateLimiter (thread-safe)
+  symbology.py heartbeat.py stream_view.py video_relay.py gateway_core.py make_atak_package.py
+  requirements.txt      eclipse-zenoh==1.9.0 (required); av, pillow (optional previews)
+demo/
+  sender.py             ONLY path for demo data into the backbone; adds exercise labels
+  scenarios/            compute positions, call sender.Sender.track(); never publish directly
+  live_map.py           map :8080, /control injects via sender
+  local_router.py       offline Zenoh router :7447
+  tools/                live_monitor.py read_cot.py verify_efdi.py
+  edge_ai/              edge-AI demo (own Dockerfile; copies relay/heartbeat.py + identity.py)
+  run-backbone-demo.ps1 setup-certs.ps1
+tools/                  make_relay_package.py (field ZIP), register_portal_topics.py (WRITES PORTAL)
+tests/                  unittest; e2e_gateway.py needs a local router
+docker-compose.yml      default = relay only; profiles: demo, edge, edge-api
+Dockerfile              targets: relay, demo; layout /opt/tak/{relay,demo}; runs as UID 10001
+```
+
+## Commands
+
+```bash
+pip install -r relay/requirements.txt
+python -m unittest discover -s tests                     # must pass before any commit
+python -m compileall -q relay demo tools tests
+python demo/local_router.py &                            # or: docker compose --profile demo up -d zenoh-router
+python tests/e2e_gateway.py                              # prints "GATEWAY E2E PASSED"
+docker compose up -d                                     # relay only
+docker compose --profile demo up -d                      # + demo
+```
+
+CI: .github/workflows/tests.yml, windows-latest + ubuntu-latest, Python 3.12.
+
+## Invariants (do not break)
+
+1. Demo data is published only via `demo/sender.py` to `<org>/exercise/<scenario>/v1/<uid>` and
+   `<org>/tak/cot/v1/EXERCISE.<uid>`, labelled `exercise: true`, `classification: SIMULATED`.
+   Never to `<org>/sensor/v1/**` (real telemetry).
+2. All TLS keys go into ONE `insert_json5("transport/link/tls", …)` call. Set separately, the
+   client cert can silently go unsent.
+3. Writes outside `<org>/**` are silently dropped by the fabric. goat_connect raises SystemExit
+   when a cert exists but the org cannot be resolved; keep that.
+4. Zenoh callbacks run on several threads. Shared state needs a lock (see `_seen_lock`,
+   `RateLimiter._lock`). Callbacks must not block: TCP clients use per-client queues + writer
+   threads (`_TcpClient`); never call blocking `sendall` from a callback.
+5. Every CoT from other vendors passes `cot_guard.validate_cot()` before `dispatch()`.
+   Free-text fields in generated CoT are XML-escaped (`quoteattr`/`escape`).
+6. `tools/make_relay_package.APP_FILES` must list every relay module the gateway imports,
+   transitively (test: `test_app_files_cover_every_sibling_import`).
+7. Heartbeat `<org>/<system>/heartbeat/v1`, interval <= 900 s, `status` from a real health check.
+8. Never commit `certs/`, `*.pem`, `*.key`, `*.cbor`, `dist/`, `.env`. Field ZIPs contain the key.
+9. Do not hardcode an org slot, a person's name or a home-directory path; use identity.py.
+
+## Configuration surface
+
+Env vars are documented in docs/en/relay.md (single source; update it when adding one).
+Identity: GOAT_CERT/KEY/CA, GOAT_CERT_DIR (exclusive when set), GOAT_ORG, GOAT_ROUTER (tls/),
+GOAT_LOCAL_ROUTER (tcp/). Outputs: TAK_UDP_TARGETS, TAK_PORT, GATEWAY_CONFIG. Ingest:
+GATEWAY_INGEST_ALL, TAK_INGEST, TAK_UDP_IN_PORT. Ops: GATEWAY_HTTP_PORT, GATEWAY_SYSTEM,
+GATEWAY_WATCHDOG_S, GATEWAY_LOST_S. Video: GATEWAY_VIDEO*.
+
+## Key spaces
+
+| Key | Dir | Format |
+| --- | --- | --- |
+| `<org>/sensor/v1/**` | in | JSON telemetry {source,lat,lon,alt,heading,speed_kmh,type,phase,lost} |
+| `*/tak/cot/v1/**` or `**` (INGEST_ALL) | in | any vendor; see backbone_cot.ALL_SOURCES |
+| `<org>/tak/pli/v1/<uid>` | out | friendly CoT from TAK clients (TAK_INGEST=1) |
+| `<org>/<system>/heartbeat/v1` | out | heartbeat JSON |
+| `<org>/exercise/**`, `<org>/tak/cot/v1/EXERCISE.*` | demo out | sender.py |
+
+Spec: docs/asyncapi-tak-gateway.yaml.
+
+## Changing things
+
+- New env var or behaviour: update docs/en/relay.md AND docs/fi/relay.md, CHANGELOG.md, tests.
+- New relay module: add to APP_FILES; tests enforce it.
+- New scenario: demo/scenarios/<name>.py using sender.Sender; document in docs/*/demo.md.
+- Docs exist in two languages with the same file names (docs/en/X.md <-> docs/fi/X.md); keep
+  them in sync. Finnish follows Kielitoimisto rules.
+- tools/register_portal_topics.py --apply and anything publishing to the real fabric affect a
+  shared exercise network: do not run them without the user's explicit consent.
+
+## Unverified (do not claim otherwise)
+
+ATAK connection package format and CoT `<video>` element on a real TAK client. Edge-AI demo CoT
+is not exercise-labelled (README there says to set EDGE_COT_AFFIL=u).
