@@ -30,3 +30,33 @@ jobs:
 
       - name: Run test suite
         run: python -m unittest discover -s tests -v
+
+      - name: End-to-end against a local router (direct, multicast, server)
+        shell: bash
+        env:
+          E2E_REQUIRED: "1"
+        run: |
+          python demo/local_router.py > router.log 2>&1 &
+          sleep 5
+          python tests/e2e_gateway.py
+          python tests/e2e_modes.py
+
+  field-install:
+    # Installs the field package as a user would (language and mode typed in) on Windows
+    # PowerShell 5.1, checks the running relay, uninstalls.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install, check, uninstall
+        run: ./tests/ci_install_windows.ps1
+
+  docker:
+    # Image build, Docker HEALTHCHECK, doctor in the container, compose files.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, start, wait for healthy
+        run: ./tests/ci_docker.sh

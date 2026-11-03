@@ -248,7 +248,7 @@ class PowerShellSyntaxTests(unittest.TestCase):
                 self._assert_parses(name, content)
 
     def test_demo_ps1_parse(self):
-        for f in sorted((REPO_ROOT / "demo").glob("*.ps1")):
+        for f in sorted([*(REPO_ROOT / "demo").glob("*.ps1"), *(REPO_ROOT / "tests").glob("*.ps1")]):
             with self.subTest(name=f.name):
                 self._assert_parses(f.name, f.read_text(encoding="utf-8"))
 

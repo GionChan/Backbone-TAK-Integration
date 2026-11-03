@@ -33,6 +33,9 @@ def main():
     try:
         socket.create_connection(("127.0.0.1", 7447), timeout=2).close()
     except OSError:
+        if os.environ.get("E2E_REQUIRED") == "1":
+            print("FAIL: local router not running")
+            return 1
         print("SKIP: local router not running")
         return 0
     tmp = tempfile.mkdtemp()
