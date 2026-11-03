@@ -2,8 +2,14 @@
 
 **In English:** [../en/troubleshooting.md](../en/troubleshooting.md)
 
-Aloita komennolla `curl localhost:8088/status`: `reasons` kertoo, mikä on vialla, ja `counters`
-näyttää, minne viestit menevät (`*_in_total`, `*_sent_total`, `*_dropped_total{reason=…}`).
+Aloita komennolla `python relay/doctor.py` (Dockerissa `docker compose exec tak-relay python3
+relay/doctor.py`, kenttäpaketissa `.\run.ps1 -CheckOnly`). Se tarkistaa bundlen, slotin,
+varmenteen voimassaolon, NetBirdin, reitittimen, portit ja TAK Serverin, ja kertoo jokaiseen
+virheeseen korjauksen.
+
+Käynnissä olevan relayn tila näkyy osoitteessa <http://localhost:8088/>. `/status` antaa saman
+JSON-muodossa: `reasons` kertoo, mikä on vialla, ja `counters` näyttää, minne viestit menevät
+(`*_in_total`, `*_sent_total`, `*_dropped_total{reason=…}`).
 
 | Oire | Todennäköinen syy | Korjaus |
 | --- | --- | --- |
@@ -18,6 +24,9 @@ näyttää, minne viestit menevät (`*_in_total`, `*_sent_total`, `*_dropped_tot
 | `no backbone samples for …` | Tilatuilla avaimilla ei julkaista mitään | `GATEWAY_INGEST_ALL=1` näyttää kaikki valmistajat; katso `/streams` |
 | ATAK-yhteys katkeaa | Asiakas ei lukenut dataa 10 sekuntiin | Tarkoituksellinen suojaus; tarkista asiakkaan verkko |
 | `port is already allocated` | Jokin muu prosessi käyttää porttia 8087, 8088, 6971, 8554, 8080 tai 7447 | Pysäytä se tai vaihda porttimäärityksen isäntäpuoli |
+| `output tcp_client:… not connected` | TAK Server ei vastaa tai hylkää varmenteen | `doctor.py` kertoo syyn; tarkista `TAK_SERVER_P12`, truststore ja `TAK_SERVER_VERIFY_HOSTNAME` |
+| Käynnistyksessä `cannot open .p12 (wrong password?)` | Väärä `TAK_SERVER_P12_PASSWORD` | Korjaa salasana. Truststore käyttää samaa salasanaa, ellei `TAK_SERVER_TRUST_PASSWORD` ole asetettu |
+| PLI:tä ei julkaista, `reason="not-local"` / `"not-allowed"` / `"echo"` | Tarkoituksellista: TAK Serverin käyttäjät, `TAK_INGEST_UIDS`-listan ulkopuoliset uidit, relayn itse lähettämät merkit | Lisää laitteen uid muuttujaan `TAK_INGEST_UIDS` |
 | `PermissionError` avaimelle (Linux) | Kontti ajetaan käyttäjänä UID 10001 | `chmod 640` avaimelle ja lukuoikeus ryhmälle 10001, tai `user: "0"` palvelulle |
 | Heartbeat ei näy portaalissa | Järjestelmänimeä ei ole rekisteröity | `python tools/register_portal_topics.py --add-system <nimi> --apply` |
 | Kenttälaite: automaattinen käynnistys puuttuu | Ajastetut tehtävät estetty käytännöllä | Asennus käyttää silloin Käynnistys-kansiota; tarkista asennuksen tuloste |

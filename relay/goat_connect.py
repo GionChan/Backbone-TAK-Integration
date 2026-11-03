@@ -6,8 +6,8 @@ Identity (see identity.py): GOAT_CERT/GOAT_KEY/GOAT_CA, else one bundle in GOAT_
 <repo>/certs, ./certs or /certs. ORG = GOAT_ORG, else the cert CN.
 
 Endpoints:
-  GOAT_ROUTER        mTLS fabric router (default: the EFDI sandbox router below). Take it from
-                     your bundle's NOTES / `goat profile show` when it differs.
+  GOAT_ROUTER        mTLS fabric router. Default: the "Router endpoint" in the bundle's NOTES.md,
+                     else the EFDI router (identity.DEFAULT_ROUTER).
   GOAT_LOCAL_ROUTER  plain-TCP router used when no bundle is found (default tcp/localhost:7447).
                      For backward compatibility a tcp/ value in GOAT_ROUTER is used here too.
 """
@@ -18,11 +18,11 @@ import zenoh
 
 import identity
 
-ROUTER_MTLS = "tls/router.example:7447"
+ROUTER_MTLS = identity.DEFAULT_ROUTER
 
 _CERT, _KEY, _CA = identity.resolve_bundle()
 _env_router = os.environ.get("GOAT_ROUTER", "")
-ROUTER = _env_router if _env_router.startswith("tls/") else ROUTER_MTLS
+ROUTER = identity.router_for(_CERT)
 LOCAL_ROUTER = os.environ.get("GOAT_LOCAL_ROUTER") or (
     _env_router if _env_router.startswith("tcp/") else "tcp/localhost:7447")
 

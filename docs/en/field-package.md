@@ -15,6 +15,10 @@ python tools/make_relay_package.py --system field-relay-01                   # �
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `--system` | required | Unique device name: `GATEWAY_SYSTEM`, heartbeat topic, file name |
+| `--lang` | asked at install | `fi` or `en`: language of the installer and its messages |
+| `--mode` | asked at install | `direct`, `multicast` or `server` ([modes](modes.md)) |
+| `--tak-server`, `--tak-p12`, `--tak-trust-p12` | — | `server` mode: address and .p12 files (copied to `certs/tak/`). The password is asked at install |
+| `--ingest-uids` | — | `TAK_INGEST_UIDS`: device uids allowed to publish |
 | `--cert-dir` | `./certs` | Bundle to include (one cert/key pair + CA) |
 | `--tak-host`, `--tak-udp-port` | `127.0.0.1`, `6969` | Where the TAK terminal listens for CoT |
 | `--tak-port` | `8087` | TCP stream port |
@@ -24,7 +28,8 @@ python tools/make_relay_package.py --system field-relay-01                   # �
 
 The package contains `app/` (the relay modules, unchanged), `certs/`, `device.env` (all settings,
 including the slot read from the certificate), `bootstrap.ps1`, `run.ps1`, `install.cmd/.ps1`,
-`uninstall.cmd/.ps1` and a Finnish quick-start. Register the system name **before** shipping,
+`uninstall.cmd/.ps1`, `lang.ps1` (all messages in Finnish and English) and READMEs in both
+languages. The scripts live in `tools/field_package/`. Register the system name **before** shipping,
 or the heartbeat shows up as unknown.
 
 **The ZIP holds the private key.** Transfer it like a secret; `dist/` is git-ignored.
@@ -32,20 +37,35 @@ or the heartbeat shows up as unknown.
 ## Install on the device
 
 1. Join the mesh (`netbird up …`); the router name resolves only inside it.
-2. Unzip, double-click `install.cmd`. It creates a venv, installs `eclipse-zenoh`, registers
-   automatic start and starts the relay at once.
+2. Unzip, double-click `install.cmd`. It asks, in this order:
+   1. **Language** (Suomi / English). Everything after this, including later starts and
+      uninstall, uses that language.
+   2. **Mode:** direct, local network or TAK Server ([modes](modes.md)).
+   3. **Details for the mode:** TAK Server address, .p12 files and password; in local-network mode
+      the device uids whose position may be published.
+
+   Anything preset with `make_relay_package.py` is not asked. The answers go to `device.env`.
+   Then it creates a venv, installs `eclipse-zenoh` (and `cryptography` in TAK Server mode),
+   registers automatic start, starts the relay and prints what to set in TAK.
    - Automatic start tries a scheduled task (at logon, no admin). If the account may not create
      scheduled tasks, it falls back to a shortcut in the Startup folder.
    - Kiosk machines with no logged-in user: `install.ps1 -AtSystemStartup` in an admin
      PowerShell (at system start, as SYSTEM).
-3. Point the terminal's CoT input at `device.env`'s `TAK_UDP_PORT` (TAK app default 6969), and
-   its UDP output at `TAK_UDP_IN_PORT` if PLI is wanted.
-4. Check `http://localhost:8088/status` → `"healthy": true`. Logs: `logs/relay-YYYYMMDD.log`.
+3. Direct mode only: point the terminal's CoT input at `device.env`'s `TAK_UDP_PORT` (TAK app
+   default 6969), and its UDP output at `TAK_UDP_IN_PORT` if PLI is wanted. Local-network and TAK
+   Server modes need nothing in TAK.
+4. Open <http://localhost:8088/>: the status page should say **Healthy**. Logs: `logs/relay-YYYYMMDD.log`.
 
-To change settings: edit `device.env`, run `uninstall.cmd`, then `install.cmd`. `uninstall`
+To change settings: edit `device.env` (delete the `TAK_MODE` or `RELAY_LANG` line to be asked
+again), run `uninstall.cmd`, then `install.cmd`. `device.env` may hold the TAK Server certificate
+password; treat the folder like the key. `uninstall`
 removes either start method and stops both the launcher loop and the relay.
 
-`run.ps1 -CheckOnly` runs a preflight (Python, zenoh, certificates) without starting the relay.
+`run.ps1 -CheckOnly` runs `doctor.py` (Python, zenoh, certificates, NetBird, router, ports) without
+starting the relay, and prints a fix for each failure.
+
+To publish only the device's own position, uncomment `TAK_INGEST_UIDS` in `device.env` and set
+the terminal's uid.
 
 The full cycle (install → healthy against the real fabric with CoT from several vendors →
 uninstall → no restart) has been verified on Windows field devices.

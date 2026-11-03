@@ -1,0 +1,13 @@
+# TAK_MODE=multicast: the relay on the host network, so it can send to and hear the TAK SA
+# multicast group (239.2.3.1:6969) on the LAN. Linux hosts only: Docker Desktop (Mac, Windows)
+# does not pass multicast through; run the relay natively or with the field package there.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.multicast.yml up -d
+#
+# Everyone on the LAN segment sees the backbone picture. See docs/en/modes.md.
+services:
+  tak-relay:
+    network_mode: host
+    ports: !reset []
+    environment:
+      TAK_MODE: multicast

@@ -40,14 +40,24 @@ Prerequisites: NetBird connected to the EFDI mesh, Docker, and your onboarding b
 mkdir certs && cp /path/to/bundle/{*-cert.pem,*-key.pem,efdi-ca-root.pem} certs/
 cp .env.example .env           # optional: adjust TAK targets, system name, ingest
 docker compose up -d           # starts the relay only
-curl localhost:8088/status     # "healthy": true once the fabric link is up and data flows
+docker compose exec tak-relay python3 relay/doctor.py   # preflight: names any problem and its fix
 ```
 
-Point your TAK client at the relay:
+Open <http://localhost:8088/> for the status page (green once the fabric link is up and data
+flows).
+
+Choose how TAK devices get the picture with `TAK_MODE` in `.env`: `direct` (default), `multicast`
+(nothing to set in TAK, closed networks only) or `server` (feed a TAK Server). See
+[choose a mode](docs/en/modes.md). In `direct` mode, point your TAK client at the relay:
 
 - **TAK app:** UDP input 6969 on the Docker host (default target).
 - **WinTAK:** add `host.docker.internal:4242` to `TAK_UDP_TARGETS` in `.env`.
 - **ATAK / WinTAK over TCP:** TAK Server → TCP streaming → `<relay-host>:8087`.
+- **A TAK Server:** set `TAK_SERVER` and its .p12 files in `.env`; every user on the server then
+  sees the backbone. See [relay: TAK Server](docs/en/relay.md#tak-server).
+
+Only your own devices' positions go to the backbone, and only with `TAK_INGEST=1`; TAK Server
+users never do.
 
 Field devices without Docker: build a self-installing package with
 `python tools/make_relay_package.py --system <name>`; see [field package](docs/en/field-package.md).
@@ -73,6 +83,7 @@ certificates everything runs against the local router, offline. See the [demo gu
 | | English | Suomi |
 | --- | --- | --- |
 | Overview and architecture (plain language) | [overview](docs/en/overview.md) | [yleiskuva](docs/fi/overview.md) |
+| Choose a mode: direct, local network (multicast) or TAK Server | [modes](docs/en/modes.md) | [tilat](docs/fi/modes.md) |
 | Relay: configuration, topics, operations, security | [relay](docs/en/relay.md) | [relay](docs/fi/relay.md) |
 | Demo: scenarios, sender, viewers | [demo](docs/en/demo.md) | [demo](docs/fi/demo.md) |
 | Field-device package (Windows, no Docker) | [field package](docs/en/field-package.md) | [kenttäpaketti](docs/fi/field-package.md) |

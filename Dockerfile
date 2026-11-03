@@ -27,8 +27,13 @@ RUN useradd --system --uid 10001 --no-create-home tak
 USER tak
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8087 8088 6971/udp 8554
+# /healthz is 200 only while the fabric link is up.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 CMD python3 -c \
+  "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/healthz' % os.environ.get('GATEWAY_HTTP_PORT','8088'), timeout=4)"
 CMD ["python3", "-u", "relay/tak_gateway.py"]
 
 FROM relay AS demo
+# Demo services (router, map, scenarios) have no /healthz.
+HEALTHCHECK NONE
 COPY demo/ demo/
 CMD ["python3", "-u", "demo/live_map.py"]

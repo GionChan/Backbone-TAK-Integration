@@ -20,6 +20,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 import make_relay_package as pkg  # noqa: E402
 
 GENERATED_PS1 = {
+    "lang.ps1": pkg.LANG_PS1,
     "bootstrap.ps1": pkg.BOOTSTRAP_PS1,
     "run.ps1": pkg.RUN_PS1,
     "install.ps1": pkg.INSTALL_PS1,
@@ -79,7 +80,7 @@ class BuildPackageTests(unittest.TestCase):
             for f in pkg.APP_FILES:
                 self.assertIn(f"app/{f}", names)
             for f in (f"certs/{ORG}-cert.pem", f"certs/{ORG}-key.pem",
-                      "certs/efdi-ca-root.pem", "device.env", "README.md",
+                      "certs/efdi-ca-root.pem", "device.env", "README.fi.md", "README.en.md",
                       *GENERATED_PS1, *GENERATED_CMD):
                 self.assertIn(f, names)
 
@@ -117,9 +118,82 @@ class BuildPackageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = _build(tmp, system="my-device", tak_port=9999)
             with zipfile.ZipFile(out) as z:
-                readme = z.read("README.md").decode()
-            self.assertIn("my-device", readme)
-            self.assertIn("9999", readme)
+                for name in ("README.fi.md", "README.en.md"):
+                    readme = z.read(name).decode()
+                    self.assertIn("my-device", readme)
+                    self.assertIn("9999", readme)
+
+    def test_choices_left_to_the_installer_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with zipfile.ZipFile(_build(tmp)) as z:
+                env = z.read("device.env").decode()
+        self.assertIn("# RELAY_LANG=", env)
+        self.assertIn("# TAK_MODE=", env)
+
+    def test_preset_server_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p12, trust = Path(tmp, "relay.p12"), Path(tmp, "truststore-root.p12")
+            p12.write_bytes(b"p12")
+            trust.write_bytes(b"trust")
+            out = _build(tmp, lang="en", mode="server", tak_server="tak.example:8089",
+                         tak_p12=str(p12), tak_trust_p12=str(trust), ingest_uids="ANDROID-1")
+            with zipfile.ZipFile(out) as z:
+                env = z.read("device.env").decode()
+                names = set(z.namelist())
+        for expected in ("RELAY_LANG=en", "TAK_MODE=server", "TAK_SERVER=tak.example:8089",
+                         "TAK_SERVER_P12=certs\\tak\\relay.p12", "TAK_SERVER_TRUST_P12=certs\\tak\\truststore-root.p12",
+                         "TAK_INGEST_UIDS=ANDROID-1"):
+            self.assertIn(expected, env.splitlines())
+        self.assertNotIn("TAK_SERVER_P12_PASSWORD=", [ln for ln in env.splitlines() if not ln.startswith("#")])
+        self.assertTrue({"certs/tak/relay.p12", "certs/tak/truststore-root.p12"} <= names)
+
+    def test_bad_mode_refused(self):
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaises(SystemExit):
+            _build(tmp, mode="broadcast")
+
+    def test_ps1_have_bom_and_crlf(self):
+        # Windows PowerShell 5.1 reads BOM-less files in the ANSI codepage: Finnish letters break.
+        with tempfile.TemporaryDirectory() as tmp:
+            with zipfile.ZipFile(_build(tmp)) as z:
+                for name in GENERATED_PS1:
+                    raw = z.read(name)
+                    self.assertTrue(raw.startswith(b"\xef\xbb\xbf"), name)
+                    self.assertNotIn(b"\r\r", raw, name)
+                    self.assertEqual(raw.count(b"\n"), raw.count(b"\r\n"), name)
+
+
+class InstallerPitfallTests(unittest.TestCase):
+    """PowerShell traps the parse check cannot see."""
+
+    def test_no_validated_params_that_are_reassigned(self):
+        # A [ValidateSet] parameter is validated on every later assignment too: assigning ""
+        # or $null (value missing from device.env) throws and stops the installer.
+        params = pkg.INSTALL_PS1.split("param(", 1)[1].split(")\n", 1)[0]
+        for name in re.findall(r"\[Validate\w+\([^]]*\)\]\s*\[\w+\]\$(\w+)", params):
+            body = pkg.INSTALL_PS1.split(")\n", 1)[1]
+            self.assertNotRegex(body, rf"\${name}\s*=[^=]", f"${name} is validated and reassigned")
+
+
+class LanguageTests(unittest.TestCase):
+    """Every message exists in both languages, and every message the scripts use exists."""
+
+    @staticmethod
+    def _keys(block: str) -> set:
+        return set(re.findall(r"^\s+(\w+)\s+=", block, re.MULTILINE))
+
+    def test_same_keys_in_fi_and_en(self):
+        fi = pkg.LANG_PS1.split("fi = @{", 1)[1].split("en = @{", 1)[0]
+        en = pkg.LANG_PS1.split("en = @{", 1)[1].split("function T", 1)[0]
+        self.assertEqual(self._keys(fi), self._keys(en))
+        self.assertGreater(len(self._keys(fi)), 40)
+
+    def test_used_keys_exist(self):
+        fi = self._keys(pkg.LANG_PS1.split("fi = @{", 1)[1].split("en = @{", 1)[0])
+        used = set()
+        for content in GENERATED_PS1.values():
+            used |= set(re.findall(r"\(T\s+[\"']([a-z_]+)[\"']", content))
+        used |= {f"mode_{m}" for m in pkg.MODES}  # built as T "mode_$Mode"
+        self.assertEqual(used - fi, set())
 
     def test_missing_certs_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -151,8 +225,8 @@ class PowerShellSyntaxTests(unittest.TestCase):
     def setUpClass(cls):
         # pwsh (7+) has correct no-BOM UTF-8 detection; legacy powershell.exe (5.1) guesses the
         # system codepage for non-ASCII no-BOM files and can misparse otherwise-valid scripts
-        # (confirmed against this repo's own setup.ps1). Our generated content is ASCII-only
-        # so either works for it, but prefer pwsh to avoid that false-positive class entirely.
+        # (confirmed against this repo's own setup.ps1). The package scripts are written
+        # with a BOM (as in the package), so either works, but prefer pwsh to avoid that false-positive class entirely.
         cls.ps = shutil.which("pwsh") or shutil.which("powershell")
         if not cls.ps:
             raise unittest.SkipTest("no pwsh/powershell on PATH")
@@ -161,7 +235,7 @@ class PowerShellSyntaxTests(unittest.TestCase):
     def _assert_parses(self, name, content):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / name
-            target.write_text(content, encoding="utf-8")
+            target.write_text(content, encoding="utf-8-sig")  # as in the package
             r = subprocess.run(
                 [self.ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", self.checker,
                  "-Target", str(target)],

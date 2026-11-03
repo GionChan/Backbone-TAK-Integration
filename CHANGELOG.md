@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.1.0 — 2026-11-03
+
+### Relay
+
+- PLI ingest publishes only your own devices. Events from a TAK Server link (other users) are
+  never published unless `TAK_INGEST_FROM=local,server`.
+- `TAK_INGEST_UIDS`: allowlist of device uids that may publish.
+- Echo guard: a uid the relay sent to TAK in the last 60 s is not published back.
+- New drop reasons `not-local`, `not-allowed`, `echo` in `gateway_ingest_dropped_total`.
+- TAK Server link from env: `TAK_SERVER`, client certificate and truststore as .p12
+  (`TAK_SERVER_P12`, `TAK_SERVER_TRUST_P12`) or PEM. The decrypted key never stays on disk.
+- Router endpoint read from the bundle's `NOTES.md` when `GOAT_ROUTER` is not set.
+- An unpacked `~/Downloads/efdi-onboarding-*` bundle is found automatically (only if there is one).
+- `relay/doctor.py`: preflight that checks bundle, slot, certificate expiry, NetBird, router,
+  ports and TAK Server, with a fix for each failure. The field package's `run.ps1 -CheckOnly`
+  runs it.
+- Status page for people at `/`; `/status` adds `version`, `org`, `system`, ingest settings.
+
+### Modes (`TAK_MODE`)
+
+- One setting picks how TAK devices get the picture: `direct` (default, as before), `multicast`
+  (TAK SA group 239.2.3.1:6969, nothing to set in TAK, closed networks only) or `server`
+  (TAK Server; local outputs off unless `TAK_LOCAL_OUTPUTS=1`). See docs/en/modes.md.
+- An impossible set-up (e.g. `server` without `TAK_SERVER`) stops the relay at start with the fix.
+- Multicast: positions heard on the LAN (`lan`) are published only for `TAK_INGEST_UIDS`.
+- Every CoT the relay sends carries `<__efdi_relay/>`; tagged events are never published
+  (`reason="relayed"`), so relays cannot loop markers back to the backbone.
+- `doctor.py`, `/status` and the status page show and check the mode.
+- `docker-compose.multicast.yml` for multicast on a Linux host network.
+
+### Field package
+
+- Installer asks first for the language (Suomi / English), then the mode and its details; all
+  later messages (install, start, uninstall) are in that language. Choices go to `device.env`.
+- `make_relay_package.py --lang --mode --tak-server --tak-p12 --tak-trust-p12 --ingest-uids`
+  preset the answers. The TAK Server password is only asked at install.
+- Scripts moved to `tools/field_package/` and written with a UTF-8 BOM (Finnish letters in
+  Windows PowerShell 5.1). READMEs in both languages.
+- `cryptography` is installed only in TAK Server mode.
+
+### Deployment
+
+- Docker image has a `HEALTHCHECK` on `/healthz` (also for plain `docker run`).
+- `cryptography` added to `relay/requirements.txt` (only needed for .p12).
+- Compose: `GOAT_ROUTER` empty by default (bundle notes win), TAK Server variables, image tag 1.1.0.
+
 ## 1.0.0 — 2026-11-03
 
 First public release.

@@ -6,7 +6,12 @@ A bundle directory holds `<prefix>-cert.pem`, `<prefix>-key.pem` and a CA root (
   2. the client certificate's CN (on EFDI the CN *is* the slot)
   3. the cert file prefix, when it looks like a 32-hex slot id
 
-Used by goat_connect.py (runtime) and tools/make_relay_package.py (build machine, no zenoh).
+Bundles are searched in GOAT_CERT_DIR (only there when set), else <repo>/certs, ./certs,
+/certs, and finally ~/Downloads/efdi-onboarding-* (used only when exactly one holds a bundle).
+The router endpoint is GOAT_ROUTER, else the "Router endpoint:" line of the bundle's NOTES.md,
+else the EFDI default.
+
+Used by goat_connect.py (runtime), doctor.py and tools/make_relay_package.py (no zenoh).
 """
 import glob
 import os
@@ -16,6 +21,8 @@ import ssl
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _SLOT_RE = re.compile(r"^[0-9a-f]{32}$")
 _CA_NAMES = ("efdi-ca-root.pem", "ca-root.pem", "ca-roots.pem")
+_ROUTER_RE = re.compile(r"Router endpoint:\s*(tls/\S+)")
+DEFAULT_ROUTER = "tls/router.example:7447"
 
 
 def cert_dirs() -> list:
@@ -23,6 +30,13 @@ def cert_dirs() -> list:
     if os.environ.get("GOAT_CERT_DIR"):
         return [os.environ["GOAT_CERT_DIR"]]
     return [os.path.join(REPO_ROOT, "certs"), "certs", "/certs"]
+
+
+def downloaded_bundle_dirs() -> list:
+    """Unpacked onboarding bundles in ~/Downloads that hold exactly one identity, newest first."""
+    dirs = glob.glob(os.path.join(os.path.expanduser("~"), "Downloads", "efdi-onboarding-*"))
+    dirs = [d for d in dirs if os.path.isdir(d) and find_bundle(d)[0]]
+    return sorted(dirs, key=os.path.getmtime, reverse=True)
 
 
 def find_bundle(d: str):
@@ -50,7 +64,27 @@ def resolve_bundle():
         found = find_bundle(d)
         if found[0]:
             return found
+    if not os.environ.get("GOAT_CERT_DIR"):
+        downloaded = downloaded_bundle_dirs()
+        if len(downloaded) == 1:  # several identities: refuse to guess
+            return find_bundle(downloaded[0])
     return None, None, None
+
+
+def router_for(cert_path) -> str:
+    """mTLS router endpoint: GOAT_ROUTER (tls/), else the bundle's NOTES.md, else the default."""
+    env = os.environ.get("GOAT_ROUTER", "")
+    if env.startswith("tls/"):
+        return env
+    if cert_path:
+        try:
+            with open(os.path.join(os.path.dirname(cert_path), "NOTES.md"), encoding="utf-8") as f:
+                m = _ROUTER_RE.search(f.read())
+            if m:
+                return m.group(1)
+        except OSError:
+            pass
+    return DEFAULT_ROUTER
 
 
 def cert_cn(cert_path: str) -> str:

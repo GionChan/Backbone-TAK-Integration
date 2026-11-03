@@ -3,3 +3,5 @@ eclipse-zenoh==1.9.0
 # Optional: /streams preview of video and images (relay/stream_view.py). The relay runs without them.
 av==19.0.1
 pillow==11.3.0
+# Optional: TAK Server .p12 certificates (TAK_SERVER_P12). PEM files work without it.
+cryptography==46.0.3

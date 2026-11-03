@@ -3,6 +3,7 @@ import json
 import os
 import socket
 import sys
+import threading
 import time
 import unittest
 import xml.etree.ElementTree as ET
@@ -69,6 +70,134 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(self.out.sent, [])
 
 
+import backbone_cot as bc  # noqa: E402
+
+
+class IngestTests(unittest.TestCase):
+    """TAK -> backbone: only the operator's own local devices reach the backbone."""
+
+    def setUp(self):
+        self.session = mock.Mock()
+        gw.SESSION[0], gw.INGEST[0] = self.session, True
+        gw._forwarded.clear()
+        gw.COUNTERS.clear()
+        limiter = mock.patch.object(gw, "_pli_limiter", cot_guard.RateLimiter(1.0))
+        limiter.start()
+        self.addCleanup(limiter.stop)
+
+    def tearDown(self):
+        gw.SESSION[0], gw.INGEST[0] = None, False
+        gw._forwarded.clear()
+        gw.OUTPUTS[:] = []
+
+    @staticmethod
+    def _pli(uid):
+        return bc.make_cot(uid, "a-f-G-U-C", 60.1, 24.9, callsign=uid)
+
+    def _published(self):
+        return [c.args[0] for c in self.session.put.call_args_list]
+
+    def test_local_device_is_published(self):
+        gw.ingest_event(self._pli("ANDROID-own1"), "udp_in@127.0.0.1")
+        self.assertEqual(self._published(), [f"{gw.gc.ORG}/tak/pli/v1/ANDROID-own1"])
+
+    def test_tak_server_users_are_not_published(self):
+        gw.ingest_event(self._pli("ANDROID-other"), "tcp_client:tak:8089", "server")
+        self.assertEqual(self._published(), [])
+        self.assertEqual(gw.COUNTERS['gateway_ingest_dropped_total{reason="not-local"}'], 1)
+
+    def test_server_ingest_needs_explicit_opt_in(self):
+        with mock.patch.object(gw, "INGEST_FROM", frozenset({"local", "server"})):
+            gw.ingest_event(self._pli("ANDROID-srv2"), "tcp_client:tak:8089", "server")
+        self.assertEqual(len(self._published()), 1)
+
+    def test_allowlist_limits_to_named_devices(self):
+        with mock.patch.object(gw, "INGEST_UIDS", frozenset({"ANDROID-own1"})):
+            gw.ingest_event(self._pli("ANDROID-own1"), "udp_in@127.0.0.1")
+            gw.ingest_event(self._pli("ANDROID-stranger"), "udp_in@127.0.0.1")
+        self.assertEqual(self._published(), [f"{gw.gc.ORG}/tak/pli/v1/ANDROID-own1"])
+        self.assertEqual(gw.COUNTERS['gateway_ingest_dropped_total{reason="not-allowed"}'], 1)
+
+    def test_markers_the_relay_sent_are_not_echoed_back(self):
+        gw.OUTPUTS[:] = [_Capture()]
+        gw.dispatch(self._pli("vendor-x.track-7"))       # backbone -> TAK
+        gw.ingest_event(self._pli("vendor-x.track-7"), "udp_in@127.0.0.1")  # TAK client forwards it back
+        self.assertEqual(self._published(), [])
+        self.assertEqual(gw.COUNTERS['gateway_ingest_dropped_total{reason="echo"}'], 1)
+
+    def test_lan_needs_the_allowlist(self):
+        with mock.patch.object(gw, "INGEST_FROM", frozenset({"local", "lan"})):
+            gw.ingest_event(self._pli("ANDROID-neighbour"), "multicast@10.0.0.9", "lan")
+            self.assertEqual(self._published(), [])
+            with mock.patch.object(gw, "INGEST_UIDS", frozenset({"ANDROID-own1"})):
+                gw.ingest_event(self._pli("ANDROID-own1"), "multicast@10.0.0.5", "lan")
+        self.assertEqual(self._published(), [f"{gw.gc.ORG}/tak/pli/v1/ANDROID-own1"])
+
+    def test_events_another_relay_sent_are_not_published(self):
+        gw.ingest_event(gw.tag(self._pli("vendor-y.track-1")), "multicast@10.0.0.7", "local")
+        self.assertEqual(self._published(), [])
+        self.assertEqual(gw.COUNTERS['gateway_ingest_dropped_total{reason="relayed"}'], 1)
+
+    def test_tcp_client_link_reads_as_server(self):
+        a, b = socket.socketpair()
+        with mock.patch.object(gw, "ingest_event") as ing:
+            b.sendall(self._pli("ANDROID-other"))
+            b.close()
+            gw._reader(a, "tcp_client:x", "server")
+        self.assertEqual(ing.call_args.args[2], "server")
+        a.close()
+
+
+class TagTests(unittest.TestCase):
+    def test_tag_goes_inside_detail_once(self):
+        for raw in (IngestTests._pli("u1"),
+                    b'<event uid="u2"><point lat="1" lon="1"/><detail/></event>',
+                    b'<event uid="u3"><point lat="1" lon="1"/></event>'):
+            tagged = gw.tag(raw)
+            root = ET.fromstring(tagged.split(b"?>", 1)[-1])
+            self.assertEqual(len(root.findall("detail")), 1, raw)
+            self.assertIsNotNone(root.find("detail/__efdi_relay"), raw)
+            self.assertEqual(gw.tag(tagged), tagged)
+
+    def test_dispatch_tags_every_output(self):
+        out = _Capture()
+        gw.OUTPUTS[:] = [out]
+        try:
+            gw.dispatch(IngestTests._pli("u4"))
+        finally:
+            gw.OUTPUTS[:] = []
+        self.assertIn(gw.RELAY_TAG, out.sent[0])
+
+
+class MulticastTests(unittest.TestCase):
+    """Real multicast over the loopback interface; skipped where the OS or network forbids it."""
+
+    def test_busy_port_does_not_stop_the_relay(self):
+        with mock.patch.object(gw, "open_multicast_listener", side_effect=OSError("address in use")):
+            gw.start_multicast_input()  # must not raise
+        self.assertGreaterEqual(gw.COUNTERS["gateway_multicast_listen_errors_total"], 1)
+
+    def test_output_reaches_a_group_member(self):
+        group, port = "239.255.42.99", _free_port()
+        try:
+            listener = gw.open_multicast_listener(group, port, "127.0.0.1")
+        except OSError as exc:
+            self.skipTest(f"multicast not available here: {exc}")
+        listener.settimeout(3)
+        out = gw.UdpOutput({"host": group, "port": port, "multicast": True, "ttl": 1, "iface": "127.0.0.1"})
+        try:
+            self.assertEqual(out.name, f"multicast:{group}:{port}")
+            out.send(b"<event/>")
+            try:
+                data, _ = listener.recvfrom(1024)
+            except OSError as exc:
+                self.skipTest(f"multicast loopback not delivered here: {exc}")
+            self.assertEqual(data, b"<event/>")
+        finally:
+            listener.close()
+            out.sock.close()
+
+
 class ConfigTests(unittest.TestCase):
     def test_udp_targets(self):
         with mock.patch.dict(os.environ, {"TAK_UDP_TARGETS": "a:1, b:2"}, clear=False):
@@ -82,6 +211,34 @@ class ConfigTests(unittest.TestCase):
             os.environ.pop("TAK_UDP_TARGETS", None)
             cfg = gw.load_config()
         self.assertIn({"type": "udp", "host": "h", "port": 7}, cfg["outputs"])
+
+    def test_tak_server_from_env(self):
+        with mock.patch.dict(os.environ, {"TAK_SERVER": "tak.example:8089", "TAK_SERVER_VERIFY_HOSTNAME": "0"}):
+            cfg = gw.load_config()
+        srv = [o for o in cfg["outputs"] if o["type"] == "tcp_client"]
+        self.assertEqual(len(srv), 1)
+        self.assertEqual((srv[0]["host"], srv[0]["port"], srv[0]["tls"]["verify_hostname"]), ("tak.example", 8089, False))
+
+
+class HttpTests(unittest.TestCase):
+    def setUp(self):
+        from http.server import ThreadingHTTPServer
+        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), gw.Ops)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.base = f"http://127.0.0.1:{self.srv.server_address[1]}"
+
+    def tearDown(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+
+    def test_status_page_and_identity_fields(self):
+        import urllib.request
+        with urllib.request.urlopen(self.base + "/", timeout=5) as r:
+            self.assertIn(b"TAK relay", r.read())
+        with urllib.request.urlopen(self.base + "/status", timeout=5) as r:
+            st = json.load(r)
+        self.assertEqual((st["version"], st["org"], st["system"]), (gw.__version__, gw.gc.ORG, gw.GATEWAY_SYSTEM))
+        self.assertEqual(st["ingest_from"], ["local"])
 
 
 class TcpServerOutputTests(unittest.TestCase):

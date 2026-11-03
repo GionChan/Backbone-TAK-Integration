@@ -1,6 +1,8 @@
 # EFDI TAK relay.
 #
-#   docker compose up -d                       the relay only (product)
+#   docker compose up -d                       the relay only (product); TAK_MODE in .env
+#   docker compose -f docker-compose.yml -f docker-compose.multicast.yml up -d
+#                                              the relay in TAK_MODE=multicast (Linux host network)
 #   docker compose --profile demo up -d        + local router, live map, swarm-orbit scenario
 #   docker compose --profile edge up -d        + edge-AI demo node and synthetic camera
 #   docker compose --profile edge-api up -d    + HTTP <-> backbone gateway for the edge-AI demo
@@ -13,7 +15,8 @@ x-fabric: &fabric
   environment: &fabric-env
     GOAT_CERT_DIR: /certs
     GOAT_ORG: ${GOAT_ORG:-}
-    GOAT_ROUTER: ${GOAT_ROUTER:-tls/router.example:7447}
+    # empty = the "Router endpoint" in certs/NOTES.md, else the EFDI router
+    GOAT_ROUTER: ${GOAT_ROUTER:-}
     # used only when ./certs is empty (local demo without the mesh)
     GOAT_LOCAL_ROUTER: tcp/zenoh-router:7447
   extra_hosts:
@@ -27,11 +30,15 @@ services:
   tak-relay:
     <<: *fabric
     build: {context: ., target: relay}
-    image: efdi-tak-relay:1.0.0
+    image: efdi-tak-relay:1.1.0
     environment:
       <<: *fabric-env
       GATEWAY_SYSTEM: ${GATEWAY_SYSTEM:-tak-gateway}
       GATEWAY_HTTP_PORT: "8088"
+      # direct | multicast | server (docs/en/modes.md). multicast also needs docker-compose.multicast.yml.
+      TAK_MODE: ${TAK_MODE:-direct}
+      TAK_LOCAL_OUTPUTS: ${TAK_LOCAL_OUTPUTS:-0}
+      TAK_MULTICAST_IF: ${TAK_MULTICAST_IF:-}
       # Backbone -> TAK. host.docker.internal = the Docker host (127.0.0.1 would be the container).
       TAK_UDP_TARGETS: ${TAK_UDP_TARGETS:-host.docker.internal:6969}
       TAK_PORT: "8087"
@@ -39,7 +46,16 @@ services:
       GATEWAY_INGEST_ALL: ${GATEWAY_INGEST_ALL:-1}
       # TAK -> backbone: friendly PLI (a-f-*) to <org>/tak/pli/v1/<uid>. Writes to the shared backbone.
       TAK_INGEST: ${TAK_INGEST:-0}
+      TAK_INGEST_FROM: ${TAK_INGEST_FROM:-}
+      TAK_INGEST_UIDS: ${TAK_INGEST_UIDS:-}
       TAK_UDP_IN_PORT: "6971"
+      # Optional TAK Server link (see docs/en/relay.md). Put the .p12 files in ./certs/tak/.
+      TAK_SERVER: ${TAK_SERVER:-}
+      TAK_SERVER_P12: ${TAK_SERVER_P12:-}
+      TAK_SERVER_P12_PASSWORD: ${TAK_SERVER_P12_PASSWORD:-}
+      TAK_SERVER_TRUST_P12: ${TAK_SERVER_TRUST_P12:-}
+      TAK_SERVER_TRUST_PASSWORD: ${TAK_SERVER_TRUST_PASSWORD:-}
+      TAK_SERVER_VERIFY_HOSTNAME: ${TAK_SERVER_VERIFY_HOSTNAME:-1}
       # Backbone video -> RTSP -> TAK "Play Video". GATEWAY_VIDEO_HOST = address TAK clients use.
       GATEWAY_VIDEO: ${GATEWAY_VIDEO:-0}
       GATEWAY_VIDEO_HOST: ${GATEWAY_VIDEO_HOST:-127.0.0.1}
@@ -49,12 +65,6 @@ services:
       - "8088:8088"       # /healthz /metrics /status /streams
       - "6971:6971/udp"   # CoT in from TAK clients (PLI ingest)
       - "8554:8554"       # RTSP (GATEWAY_VIDEO=1)
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8088/healthz', timeout=3).status == 200 else 1)"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 120s
     restart: unless-stopped
 
   # ── Demo (profile "demo") ──────────────────────────────────────────────────

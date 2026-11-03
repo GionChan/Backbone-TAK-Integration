@@ -12,7 +12,10 @@
 | --- | --- |
 | `tak_gateway.py` | Käynnistyspiste: tilaukset, ulostulot, PLI, HTTP-rajapinnat, watchdog |
 | `goat_connect.py` | Zenoh-istunnon asetukset: mTLS fabriciin tai paikallinen reititin ilman sertifikaatteja |
-| `identity.py` | Etsii sertifikaattibundlen ja slotin (vain standardikirjasto) |
+| `identity.py` | Etsii sertifikaattibundlen, slotin ja reitittimen (vain standardikirjasto) |
+| `tak_links.py` | TAK-puolen asetukset: UDP-kohteet, TAK Server -yhteys ja sen TLS (.p12 tai PEM) |
+| `doctor.py` | Esitarkistus: `python relay/doctor.py` |
+| `status_page.py` | Tilasivu osoitteessa `/` |
 | `backbone_cot.py` | Tunnistaa valmistajien datamuodot ja muuntaa ne CoT-muotoon |
 | `cot_guard.py` | CoT-tarkistus ja avainkohtainen tahdinrajoitin |
 | `symbology.py` | CoT-tyyppi (osapuoli, ulottuvuus) tekstistä, SIDC-koodista tai liiketiedoista |
@@ -27,15 +30,19 @@
 | Muuttuja | Oletus | Merkitys |
 | --- | --- | --- |
 | `GOAT_CERT`, `GOAT_KEY`, `GOAT_CA` | – | PEM-tiedostojen polut (kaikki kolme) |
-| `GOAT_CERT_DIR` | `<repo>/certs`, `./certs`, `/certs` | Bundlen hakemisto. Kun asetettu, haetaan vain siitä |
+| `GOAT_CERT_DIR` | `<repo>/certs`, `./certs`, `/certs`, sitten `~/Downloads/efdi-onboarding-*` | Bundlen hakemisto. Kun asetettu, haetaan vain siitä |
 | `GOAT_ORG` | sertifikaatin CN | Slot. Tarvitaan vain, jos CN ei ole slot |
-| `GOAT_ROUTER` | `tls/router.example:7447` | mTLS-reititin. Ota bundlesta, jos se on eri |
+| `GOAT_ROUTER` | bundlen `NOTES.md`-tiedoston `Router endpoint`, muuten `tls/router.example:7447` | mTLS-reititin |
 | `GOAT_LOCAL_ROUTER` | `tcp/localhost:7447` | Reititin, kun bundlea ei löydy |
 | `GOAT_LEASE_MS` | `60000` | Zenohin lease-aika; pitkä, koska välitetyt mesh-yhteydet takkuavat |
 
 Bundlehakemistossa pitää olla täsmälleen yksi `<etuliite>-cert.pem`- ja `<etuliite>-key.pem`-pari
 sekä CA-juuri (`efdi-ca-root.pem`). Jos sertifikaatti löytyy mutta slotia ei saada selville, relay
 ei käynnisty, koska slotin ulkopuolelle kirjoitetut viestit hylättäisiin ilman virheilmoitusta.
+
+Jos muuta bundlea ei löydy, relay käyttää Lataukset-kansioon purettua onboarding-bundlea
+(`~/Downloads/efdi-onboarding-*`), kun tällaisia hakemistoja on täsmälleen yksi. Jos niitä on
+useampia, aseta `GOAT_CERT_DIR`.
 
 ## Backbone → TAK
 
@@ -55,12 +62,19 @@ heartbeateja ja relayn omaa PLI:tä ei koskaan muunneta.
 
 ## Ulostulot
 
+`TAK_MODE` valitsee kokoonpanon; ks. [tilan valinta](modes.md). Alla olevilla muuttujilla sitä
+voi hienosäätää.
+
 | Muuttuja | Oletus | Merkitys |
 | --- | --- | --- |
+| `TAK_MODE` | `direct` | `direct`, `multicast` tai `server` |
+| `TAK_LOCAL_OUTPUTS` | `0` | `server`-tila: `1` pitää myös UDP- ja TCP-lähdöt päällä |
+| `TAK_MULTICAST_GROUP`, `TAK_MULTICAST_IF`, `TAK_MULTICAST_TTL` | `239.2.3.1:6969`, käyttöjärjestelmän valinta, `1` | `multicast`-tila, ks. [tilat](modes.md#multicast) |
 | `TAK_UDP_TARGETS` | `TAK_HOST:TAK_UDP_PORT` | `osoite:portti[,osoite:portti…]`, CoT UDP:llä. TAK app 6969, WinTAK 4242 |
 | `TAK_HOST`, `TAK_UDP_PORT` | `127.0.0.1`, `6969` | Yksi UDP-kohde (vanhempi muoto) |
 | `TAK_PORT` | `8087` | TCP-palvelin ATAK- ja WinTAK-striimausasiakkaille |
-| `GATEWAY_CONFIG` | – | JSON-tiedosto, joka korvaa yllä olevat; myös TAK Server -yhteydet TCP:llä tai TLS:llä |
+| `TAK_SERVER` | – | TAK Serverin `osoite[:portti]`, jolle virta lähetetään (ks. alla) |
+| `GATEWAY_CONFIG` | – | JSON-tiedosto, joka korvaa kaikki yllä olevat |
 
 ```json
 {"outputs": [{"type": "udp", "host": "host.docker.internal", "port": 6969},
@@ -74,17 +88,58 @@ Jokaisella TCP-asiakkaalla on oma jono (1 000 tapahtumaa) ja kirjoitussäie. Asi
 lakkaa lukemasta, täyttää vain oman jononsa, ja yhteys katkaistaan, jos lähetys ei etene
 10 sekuntiin (`gateway_output_dropped_total`).
 
+## TAK Server
+
+Kun `TAK_SERVER` on asetettu, relay lähettää virran myös TAK Serverille, ja jokainen serverin
+käyttäjä näkee backbonen tilannekuvan. Yksi relay TAK Serveriä kohden riittää; serverin laitteet
+eivät tarvitse omaa relayta.
+
+| Muuttuja | Oletus | Merkitys |
+| --- | --- | --- |
+| `TAK_SERVER` | – | `osoite[:portti]`, portti 8089, jos sitä ei anneta |
+| `TAK_SERVER_TLS` | `1` (portissa 8087 `0`) | TLS ja asiakasvarmenne |
+| `TAK_SERVER_P12`, `TAK_SERVER_P12_PASSWORD` | – | TAK Serverin myöntämä asiakasvarmenne (.p12) |
+| `TAK_SERVER_TRUST_P12`, `TAK_SERVER_TRUST_PASSWORD` | –, P12-salasana | Truststore, jossa on TAK Serverin CA (.p12) |
+| `TAK_SERVER_CERT`, `TAK_SERVER_KEY`, `TAK_SERVER_CA` | – | PEM-tiedostot .p12:n sijaan |
+| `TAK_SERVER_VERIFY_HOSTNAME` | `1` | `0`, jos serverin varmenteessa ei ole käyttämääsi osoitetta |
+
+.p12-tiedostot tarvitsevat `cryptography`-kirjaston (mukana `relay/requirements.txt`-tiedostossa
+ja Docker-imagessa). Purettua avainta ei jätetä levylle. Dockerissa tiedostot laitetaan
+kansioon `certs/tak/`, ja polut ovat muotoa `/certs/tak/…`. Väärä salasana tai tiedosto
+pysäyttää relayn käynnistyksessä selkeään virheilmoitukseen, ja `doctor.py` testaa yhteyden
+muodostuksen. TAK Serverin käyttäjiä ei koskaan julkaista backboneen (ks. seuraava luku).
+
+Älä syötä samoja laitteita sekä suoraan (UDP tai `:8087`) että TAK Serverin kautta, koska silloin
+jokainen merkki tulee kahdesti. Valitse jokaiselle laitteelle yksi reitti.
+
 ## TAK → backbone (PLI)
 
 | Muuttuja | Oletus | Merkitys |
 | --- | --- | --- |
 | `TAK_INGEST` | `0` | `1`: julkaise omat (friendly) CoT-tapahtumat polkuun `<slot>/tak/pli/v1/<uid>` |
 | `TAK_INGEST_TYPES` | `a-f-` | Hyväksytyt tyyppietuliitteet pilkulla erotettuina |
+| `TAK_INGEST_FROM` | `local` (`multicast`-tilassa `local,lan`) | Mistä yhteyksistä saa julkaista: `local` (UDP-sisääntulo, porttiin `:8087` yhdistäneet asiakkaat), `lan` (multicast-ryhmä, vain `TAK_INGEST_UIDS`-listan kanssa), `server` (TAK Server -yhteys). Pilkulla erotettuina |
+| `TAK_INGEST_UIDS` | tyhjä | Julkaistavien laitteiden uidit pilkulla erotettuina (esim. `ANDROID-abc123`). Tyhjä = mikä tahansa paikallinen laite |
 | `TAK_UDP_IN_PORT` | `0` (compose: `6971`) | UDP-portti TAK-asiakkaiden CoT:lle (esim. TAK-sovelluksen ulostulo) |
 
 Myös porttiin `:8087` yhdistäneiden TCP-asiakkaiden lähettämät tapahtumat luetaan. Enintään
 yksi päivitys sekunnissa uidia kohden; tehtävätyyppejä (`t-*`) ja muita kuin omia tyyppejä ei
 julkaista. Tämä kirjoittaa jaettuun backboneen, joten se on oletuksena pois päältä.
+
+Backboneen julkaistaan vain omien laitteiden sijainnit:
+
+- **TAK Serverin käyttäjät pysyvät TAK Serverillä.** `tcp_client`-yhteydessä kulkevat kaikkien
+  serverin käyttäjien tiedot. Ne näytetään TAKissa, mutta niitä ei julkaista backboneen, ellei
+  asetuksena ole `TAK_INGEST_FROM=local,server`.
+- **Sallittujen lista.** Kun `TAK_INGEST_UIDS` on asetettu, julkaistaan vain listatut uidit,
+  vaikka terminaali välittäisi muidenkin sijainteja.
+- **Ei kaikua.** Uidia, jonka relay on itse lähettänyt TAKiin viimeisen 60 sekunnin aikana, ei
+  julkaista takaisin.
+
+Hylätyt tapahtumat lasketaan mittariin
+`gateway_ingest_dropped_total{reason="not-local"|"not-allowed"|"echo"|"relayed"}` (`relayed`:
+tapahtumassa on toisen relayn merkintä, ks. [tilat](modes.md#kaikissa-tiloissa)), ja `/status` näyttää
+asetukset `ingest_from` ja `ingest_uids`.
 
 ## Heartbeat ja terveystila
 
@@ -104,9 +159,10 @@ yhteys fabriciin on ollut poikki `GATEWAY_LOST_S` sekuntia (300) tai dataa ei ol
 
 | Polku | Sisältö |
 | --- | --- |
-| `/healthz` | 200, kun yhteys fabriciin on ylhäällä, muuten 503 |
+| `/` | Tilasivu ihmisille: terveystila, syyt, ulostulot, liikenne, pudotukset |
+| `/healthz` | 200, kun yhteys fabriciin on ylhäällä, muuten 503 (Dockerin `HEALTHCHECK`) |
 | `/metrics` | Prometheus-teksti: lähetykset, virheet ja pudotukset ulostuloittain, pudotusten syyt, nähdyt tyypit |
-| `/status` | JSON: terveystila syineen, laskurit, ulostulot, PLI, video |
+| `/status` | JSON: terveystila syineen, versio, slot, järjestelmänimi, laskurit, ulostulot, PLI-asetukset, video |
 | `/streams` | Selainnäkymä backbonen liikenteeseen avainryhmittäin, kuva- ja videoesikatselu |
 | `/api/streams`, `/api/sample?g=`, `/api/preview?g=`, `/api/video?g=` | `/streams`-näkymän data |
 
@@ -141,3 +197,5 @@ mediamtx ovat Docker-imagessa valmiina.
   MediaMTX-putki itsessään on varmistettu päästä päähän.
 - Kenttälaitteet käyttävät organisaation yhteistä sertifikaattia; laitekohtaisesti eroaa vain
   `GATEWAY_SYSTEM`.
+- TAK Server -yhteys on testattu paikallista TLS-palvelinta ja asiakasvarmennetta vasten, mutta
+  ei vielä oikeaa TAK Serveriä vasten.

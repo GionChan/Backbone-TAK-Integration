@@ -8,9 +8,11 @@ Backbone -> TAK
   towards a TAK Server), each with its own reconnect/queue and counters.
 
 TAK -> backbone (optional, TAK_INGEST=1)
-  * CoT events that TAK clients send over the TCP server / TCP client links (friendly PLI by
-    default) are validated and published to <org>/tak/pli/v1/<uid>. Off by default: it writes
-    to the shared backbone.
+  * CoT events that local TAK clients send (UDP input, TCP server) are validated and published
+    to <org>/tak/pli/v1/<uid> (friendly PLI by default). Off by default: it writes to the shared
+    backbone. Events from a TAK Server link carry other users' positions and are never published
+    unless TAK_INGEST_FROM includes "server". TAK_INGEST_UIDS limits publishing to named devices.
+    Events whose uid the relay itself sent to TAK in the last 60 s are dropped (no echo loops).
 
 Operations
   * GET :8088/healthz  200 when the fabric link is up, else 503
@@ -23,7 +25,8 @@ Config: env for the simple case, or GATEWAY_CONFIG=<json file>:
               {"type":"tcp_client","host":"tak.example","port":8089,
                "tls":{"cert":"c.pem","key":"k.pem","ca":"ca.pem","verify_hostname":false}}],
    "ingest":false}
-Simple env: TAK_UDP_TARGETS (host:port[,host:port...]; else TAK_HOST + TAK_UDP_PORT), TAK_PORT, TAK_INGEST, GATEWAY_HTTP_PORT, XV_MAX_HZ_PER_UID,
+Simple env: TAK_UDP_TARGETS (host:port[,host:port...]; else TAK_HOST + TAK_UDP_PORT), TAK_PORT, TAK_INGEST,
+TAK_INGEST_FROM (local[,server]), TAK_INGEST_UIDS, TAK_SERVER* (see tak_links.py), GATEWAY_HTTP_PORT, XV_MAX_HZ_PER_UID,
 GATEWAY_WATCHDOG_S (silence, default 300), GATEWAY_LOST_S (fabric link down, default 300: Zenoh reconnects by itself, a restart costs ~1 min),
 GATEWAY_INGEST_ALL=1 (convert every recognisable positional message on the backbone, see backbone_cot.py),
 GATEWAY_SOURCES (subset of xml,geotrack,consilium,mavlink,hymots,orion,adsb,alerts,roi,proto), GATEWAY_HYMOTS_INTERVAL_S.
@@ -41,7 +44,6 @@ import json
 import os
 import re
 import socket
-import ssl
 import sys
 import threading
 import time
@@ -57,11 +59,13 @@ import cot_guard  # noqa: E402
 import gateway_core as core  # noqa: E402
 import goat_connect as gc  # noqa: E402
 import heartbeat as hb  # noqa: E402
+import status_page  # noqa: E402
 import stream_view  # noqa: E402
 import symbology  # noqa: E402
+import tak_links  # noqa: E402
 import video_relay  # noqa: E402
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 START = time.time()
 GATEWAY_SYSTEM = os.environ.get("GATEWAY_SYSTEM", "tak-gateway")
 UDP_IN_PORT = int(os.environ.get("TAK_UDP_IN_PORT", "0"))
@@ -74,6 +78,24 @@ INGEST = [False]
 _limiter = cot_guard.RateLimiter(float(os.environ.get("XV_MAX_HZ_PER_UID", "2")))
 _pli_limiter = cot_guard.RateLimiter(1.0)
 _INGEST_PREFIXES = tuple(os.environ.get("TAK_INGEST_TYPES", "a-f-").split(","))
+
+
+def _csv_set(name: str, default: str = "") -> frozenset:
+    return frozenset(x.strip() for x in os.environ.get(name, default).split(",") if x.strip())
+
+
+try:
+    MODE, _MODE_ERROR = tak_links.mode(), None
+except tak_links.ConfigError as _exc:  # reported by main(); keeps the module importable for tests
+    MODE, _MODE_ERROR = "direct", _exc
+# Link kinds: "local" (UDP input, TCP server clients), "lan" (multicast group), "server" (TAK Server).
+INGEST_FROM = _csv_set("TAK_INGEST_FROM", tak_links.default_ingest_from(MODE))
+INGEST_UIDS = _csv_set("TAK_INGEST_UIDS")            # empty = any local device ("lan" needs the list)
+# Added to every CoT the relay sends, so no relay re-publishes what a relay put on TAK.
+RELAY_TAG = b"<__efdi_relay/>"
+_ECHO_S = 60.0
+_forwarded: dict = {}                                # uid -> last time the relay sent it to TAK
+_forwarded_lock = threading.Lock()
 _COT_TYPE = os.environ.get("COT_TYPE", "a-h-A-M-F-Q")
 INGEST_ALL = os.environ.get("GATEWAY_INGEST_ALL", "0") == "1"
 SOURCES = tuple(x for x in os.environ.get("GATEWAY_SOURCES", ",".join(bc.ALL_SOURCES)).split(",") if x)
@@ -155,8 +177,46 @@ def _safe_key(uid: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "_", uid)[:96] or "unknown"
 
 
-def ingest_event(ev: bytes, origin: str) -> None:
+def _recently_forwarded(uid: str) -> bool:
+    with _forwarded_lock:
+        t = _forwarded.get(uid)
+    return t is not None and time.time() - t < _ECHO_S
+
+
+def _remember_forwarded(data: bytes) -> None:
+    uid = cot_guard.uid_of(data)
+    if not uid:
+        return
+    now = time.time()
+    with _forwarded_lock:
+        _forwarded[uid] = now
+        if len(_forwarded) > 20000:
+            for k in [k for k, t in _forwarded.items() if now - t > _ECHO_S]:
+                _forwarded.pop(k, None)
+
+
+def tag(data: bytes) -> bytes:
+    """data with RELAY_TAG inside <detail> (TAK clients keep unknown detail elements)."""
+    if RELAY_TAG in data:
+        return data
+    i = data.rfind(b"</detail>")
+    if i >= 0:
+        return data[:i] + RELAY_TAG + data[i:]
+    if b"<detail/>" in data:
+        return data.replace(b"<detail/>", b"<detail>" + RELAY_TAG + b"</detail>", 1)
+    j = data.rfind(b"</event>")
+    return data[:j] + b"<detail>" + RELAY_TAG + b"</detail>" + data[j:] if j >= 0 else data
+
+
+def ingest_event(ev: bytes, origin: str, kind: str = "local") -> None:
+    """Publish one CoT event from a TAK link as PLI. kind: "local", "lan" or "server"."""
     if not INGEST[0] or SESSION[0] is None:
+        return
+    if kind not in INGEST_FROM:
+        inc('gateway_ingest_dropped_total{reason="not-local"}')
+        return
+    if RELAY_TAG in ev:
+        inc('gateway_ingest_dropped_total{reason="relayed"}')
         return
     ok, reason = cot_guard.validate_cot(ev)
     if not ok:
@@ -171,6 +231,12 @@ def ingest_event(ev: bytes, origin: str) -> None:
         inc('gateway_ingest_dropped_total{reason="type"}')
         return
     uid = root.get("uid", "")
+    if (INGEST_UIDS or kind == "lan") and uid not in INGEST_UIDS:
+        inc('gateway_ingest_dropped_total{reason="not-allowed"}')
+        return
+    if _recently_forwarded(uid):
+        inc('gateway_ingest_dropped_total{reason="echo"}')
+        return
     if not _pli_limiter.allow(uid):
         inc('gateway_ingest_dropped_total{reason="rate-limited"}')
         return
@@ -182,7 +248,7 @@ def ingest_event(ev: bytes, origin: str) -> None:
         log(f"ingest publish failed: {exc}")
 
 
-def _reader(sock: socket.socket, origin: str) -> None:
+def _reader(sock: socket.socket, origin: str, kind: str = "local") -> None:
     buf = bytearray()
     try:
         while True:
@@ -191,7 +257,7 @@ def _reader(sock: socket.socket, origin: str) -> None:
                 return
             buf.extend(chunk)
             for ev in core.split_cot_stream(buf):
-                ingest_event(ev, origin)
+                ingest_event(ev, origin, kind)
     except OSError:
         return
 
@@ -199,9 +265,15 @@ def _reader(sock: socket.socket, origin: str) -> None:
 # ---------------------------------------------------------------- outputs
 class UdpOutput:
     def __init__(self, cfg):
-        self.name = f"udp:{cfg['host']}:{cfg['port']}"
+        self.name = f"{'multicast' if cfg.get('multicast') else 'udp'}:{cfg['host']}:{cfg['port']}"
         self.addr = (cfg["host"], int(cfg["port"]))
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        if cfg.get("multicast"):
+            self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, int(cfg.get("ttl", 1)))
+            # Loop back, so TAK on this same machine gets the markers too.
+            self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
+            if cfg.get("iface"):
+                self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(cfg["iface"]))
 
     def send(self, data: bytes) -> None:
         try:
@@ -333,6 +405,8 @@ class TcpClientOutput:
     def __init__(self, cfg):
         self.cfg = cfg
         self.name = f"tcp_client:{cfg['host']}:{cfg['port']}"
+        # Built once: a wrong .p12 password or a missing file stops the relay at start, loudly.
+        self.ctx = tak_links.ssl_context(cfg["tls"]) if cfg.get("tls") else None
         self.q = collections.deque(maxlen=int(cfg.get("queue", 1000)))
         self.cv = threading.Condition()
         self.connected = False
@@ -340,14 +414,8 @@ class TcpClientOutput:
 
     def _connect(self):
         s = socket.create_connection((self.cfg["host"], int(self.cfg["port"])), timeout=10)
-        tls = self.cfg.get("tls")
-        if tls:
-            ctx = ssl.create_default_context(cafile=tls.get("ca"))
-            if tls.get("cert"):
-                ctx.load_cert_chain(tls["cert"], tls.get("key"))
-            if not tls.get("verify_hostname", True):
-                ctx.check_hostname = False
-            s = ctx.wrap_socket(s, server_hostname=self.cfg["host"])
+        if self.ctx is not None:
+            s = self.ctx.wrap_socket(s, server_hostname=self.cfg["host"])
         s.settimeout(None)
         return s
 
@@ -365,7 +433,7 @@ class TcpClientOutput:
             delay = 2.0
             self.connected = True
             log(f"{self.name}: connected")
-            threading.Thread(target=_reader, args=(sock, self.name), daemon=True).start()
+            threading.Thread(target=_reader, args=(sock, self.name, "server"), daemon=True).start()
             try:
                 while True:
                     with self.cv:
@@ -414,6 +482,44 @@ def start_udp_input(port: int) -> None:
     log(f"udp input listening on :{port} (TAK -> backbone ingest={'on' if INGEST[0] else 'off'})")
 
 
+def open_multicast_listener(group: str, port: int, iface: str = "") -> socket.socket:
+    """UDP socket joined to the multicast group; shares the port with TAK clients on this machine."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    if hasattr(socket, "SO_REUSEPORT"):
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+    sock.bind(("", port))
+    mreq = socket.inet_aton(group) + socket.inet_aton(iface or "0.0.0.0")
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+    return sock
+
+
+def start_multicast_input() -> None:
+    """PLI from TAK clients on the LAN (they send their SA to the group). Kind "lan"."""
+    group, port = tak_links.multicast_group()
+    try:
+        sock = open_multicast_listener(group, port, os.environ.get("TAK_MULTICAST_IF", ""))
+    except OSError as exc:
+        # e.g. a TAK app on this machine holds the port exclusively. Sending still works.
+        inc("gateway_multicast_listen_errors_total")
+        log(f"multicast input on {group}:{port} unavailable ({exc}); sending only, no PLI from the LAN")
+        return
+
+    def loop():
+        while True:
+            try:
+                data, addr = sock.recvfrom(65535)
+            except OSError:
+                return
+            inc("gateway_multicast_in_datagrams_total")
+            for ev in core.split_cot_stream(bytearray(data)):
+                ingest_event(ev, f"multicast@{addr[0]}", "lan")
+
+    threading.Thread(target=loop, daemon=True).start()
+    log(f"multicast input on {group}:{port} (published only for TAK_INGEST_UIDS: "
+        f"{', '.join(sorted(INGEST_UIDS)) or 'none'})")
+
+
 def health() -> tuple:
     """(ok, reasons) for /status and the heartbeat."""
     reasons = []
@@ -449,20 +555,17 @@ def load_config() -> dict:
     if path:
         with open(path, encoding="utf-8") as f:
             return json.load(f)
-    targets = os.environ.get("TAK_UDP_TARGETS") or (
-        f'{os.environ.get("TAK_HOST", "127.0.0.1")}:{os.environ.get("TAK_UDP_PORT", "6969")}')
-    udp = []
-    for t in filter(None, (x.strip() for x in targets.split(","))):
-        host, _, port = t.rpartition(":")
-        udp.append({"type": "udp", "host": host, "port": int(port)})
     return {
-        "outputs": udp + [{"type": "tcp_server", "port": int(os.environ.get("TAK_PORT", "8087"))}],
+        "outputs": tak_links.outputs(MODE),
         "ingest": os.environ.get("TAK_INGEST", "0") == "1",
     }
 
 
 # ---------------------------------------------------------------- dispatch + subscriptions
 def dispatch(data: bytes) -> None:
+    if INGEST[0]:
+        _remember_forwarded(data)
+    data = tag(data)
     for o in OUTPUTS:
         try:
             o.send(data)
@@ -613,7 +716,9 @@ class Ops(BaseHTTPRequestHandler):
 
     def do_GET(self):
         counters, gauges = snapshot()
-        if self.path == "/healthz":
+        if self.path in ("/", "/index.html"):
+            self._send(200, status_page.PAGE, "text/html; charset=utf-8")
+        elif self.path == "/healthz":
             ok = fabric_up()
             self._send(200 if ok else 503, json.dumps({"fabric_up": ok}))
         elif self.path == "/metrics":
@@ -658,8 +763,10 @@ class Ops(BaseHTTPRequestHandler):
             self._send(200, json.dumps(STREAMS.snapshot()))
         elif self.path == "/status":
             ok, reasons = health()
-            self._send(200, json.dumps({"healthy": ok, "reasons": reasons, "counters": counters, "gauges": gauges,
+            self._send(200, json.dumps({"healthy": ok, "reasons": reasons, "version": __version__, "mode": MODE, "org": gc.ORG,
+                                        "system": GATEWAY_SYSTEM, "counters": counters, "gauges": gauges,
                                         "outputs": [o.status() for o in OUTPUTS], "ingest": INGEST[0],
+                                        "ingest_from": sorted(INGEST_FROM), "ingest_uids": sorted(INGEST_UIDS),
                                         "video": VIDEO.status() if VIDEO is not None else None}, indent=1))
         else:
             self._send(404, '{"error":"not found"}')
@@ -679,15 +786,26 @@ def open_session_retry():
 
 
 def main() -> None:
-    cfg = load_config()
+    if _MODE_ERROR is not None:
+        raise SystemExit(f"configuration error: {_MODE_ERROR}")
+    try:
+        cfg = load_config()
+    except tak_links.ConfigError as exc:
+        raise SystemExit(f"configuration error: {exc}") from None
     INGEST[0] = bool(cfg.get("ingest"))
     OUTPUTS.extend(build_outputs(cfg))
     port = int(os.environ.get("GATEWAY_HTTP_PORT", "8088"))
     threading.Thread(target=ThreadingHTTPServer(("", port), Ops).serve_forever, daemon=True).start()
-    log(f"v{__version__} org={gc.ORG} outputs={[o.name for o in OUTPUTS]} ingest={INGEST[0]} http=:{port}")
+    log(f"v{__version__} mode={MODE} org={gc.ORG} outputs={[o.name for o in OUTPUTS]} ingest={INGEST[0]} "
+        f"ingest_from={','.join(sorted(INGEST_FROM))} ingest_uids={len(INGEST_UIDS) or 'any'} http=:{port}")
 
     if UDP_IN_PORT:
         start_udp_input(UDP_IN_PORT)
+    if MODE == "multicast" and INGEST[0]:
+        if not INGEST_UIDS:
+            log("WARNING: TAK_MODE=multicast hears every TAK user on the LAN; nobody is published "
+                "until TAK_INGEST_UIDS names your devices")
+        start_multicast_input()
     session, is_real = open_session_retry()
     SESSION[0] = session
     if is_real and os.environ.get("GATEWAY_HEARTBEAT", "1") == "1":

@@ -12,7 +12,10 @@
 | --- | --- |
 | `tak_gateway.py` | Entry point: subscriptions, outputs, PLI ingest, HTTP endpoints, watchdog |
 | `goat_connect.py` | Zenoh session config: mTLS to the fabric, or a local router without certificates |
-| `identity.py` | Finds the certificate bundle and the org slot (stdlib only) |
+| `identity.py` | Finds the certificate bundle, the org slot and the router (stdlib only) |
+| `tak_links.py` | TAK-side settings: UDP targets, TAK Server link and its TLS (.p12 or PEM) |
+| `doctor.py` | Preflight check: `python relay/doctor.py` |
+| `status_page.py` | Status page at `/` |
 | `backbone_cot.py` | Recognises vendor formats and converts them to CoT |
 | `cot_guard.py` | CoT validation and per-key rate limiter |
 | `symbology.py` | CoT type (affiliation, dimension) from text, SIDC or kinematics |
@@ -27,15 +30,18 @@
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `GOAT_CERT`, `GOAT_KEY`, `GOAT_CA` | — | Explicit PEM paths (all three) |
-| `GOAT_CERT_DIR` | `<repo>/certs`, `./certs`, `/certs` | Bundle directory. When set, it is the only one searched |
+| `GOAT_CERT_DIR` | `<repo>/certs`, `./certs`, `/certs`, then `~/Downloads/efdi-onboarding-*` | Bundle directory. When set, it is the only one searched |
 | `GOAT_ORG` | certificate CN | Org slot. Needed only if the CN is not the slot |
-| `GOAT_ROUTER` | `tls/router.example:7447` | mTLS router. Take it from your bundle if it differs |
+| `GOAT_ROUTER` | `Router endpoint` in the bundle's `NOTES.md`, else `tls/router.example:7447` | mTLS router |
 | `GOAT_LOCAL_ROUTER` | `tcp/localhost:7447` | Router used when no bundle is found |
 | `GOAT_LEASE_MS` | `60000` | Zenoh lease; long, because relayed mesh paths stall |
 
 A bundle directory must hold exactly one `<prefix>-cert.pem` + `<prefix>-key.pem` pair and a CA
 root (`efdi-ca-root.pem`). With a certificate but no resolvable slot the relay refuses to start,
 because writes outside your slot would be dropped without an error.
+
+An unpacked onboarding bundle in `~/Downloads/efdi-onboarding-*` is used when no other bundle is
+found and exactly one such directory exists. With several, set `GOAT_CERT_DIR`.
 
 ## Backbone → TAK
 
@@ -55,12 +61,18 @@ PLI are never converted.
 
 ## Outputs
 
+`TAK_MODE` picks the set-up; see [choose a mode](modes.md). The variables below fine-tune it.
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
+| `TAK_MODE` | `direct` | `direct`, `multicast` or `server` |
+| `TAK_LOCAL_OUTPUTS` | `0` | `server` mode: `1` keeps the UDP and TCP outputs too |
+| `TAK_MULTICAST_GROUP`, `TAK_MULTICAST_IF`, `TAK_MULTICAST_TTL` | `239.2.3.1:6969`, OS default, `1` | `multicast` mode, see [modes](modes.md#multicast) |
 | `TAK_UDP_TARGETS` | `TAK_HOST:TAK_UDP_PORT` | `host:port[,host:port…]` CoT by UDP. TAK app 6969, WinTAK 4242 |
 | `TAK_HOST`, `TAK_UDP_PORT` | `127.0.0.1`, `6969` | Single UDP target (older form) |
 | `TAK_PORT` | `8087` | TCP server for ATAK/WinTAK streaming clients |
-| `GATEWAY_CONFIG` | — | JSON file replacing the above, also for TAK Server TCP/TLS clients |
+| `TAK_SERVER` | — | `host[:port]` of a TAK Server to stream to (see below) |
+| `GATEWAY_CONFIG` | — | JSON file replacing all of the above |
 
 ```json
 {"outputs": [{"type": "udp", "host": "host.docker.internal", "port": 6969},
@@ -74,17 +86,54 @@ Each TCP client has its own queue (1000 events) and writer thread. A client that
 overflows only its own queue and is dropped after 10 s without progress
 (`gateway_output_dropped_total`).
 
+## TAK Server
+
+With `TAK_SERVER` set, the relay also streams to a TAK Server, and every user on that server sees
+the backbone picture. One relay per TAK Server is enough; devices on the server need no relay of
+their own.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TAK_SERVER` | — | `host[:port]`, port 8089 if omitted |
+| `TAK_SERVER_TLS` | `1` (`0` on port 8087) | TLS with a client certificate |
+| `TAK_SERVER_P12`, `TAK_SERVER_P12_PASSWORD` | — | Client certificate issued by the TAK Server (.p12) |
+| `TAK_SERVER_TRUST_P12`, `TAK_SERVER_TRUST_PASSWORD` | —, the P12 password | Truststore with the TAK Server CA (.p12) |
+| `TAK_SERVER_CERT`, `TAK_SERVER_KEY`, `TAK_SERVER_CA` | — | PEM files instead of .p12 |
+| `TAK_SERVER_VERIFY_HOSTNAME` | `1` | `0` when the server certificate does not name the address you use |
+
+.p12 files need `cryptography` (in `relay/requirements.txt` and the Docker image). The decrypted
+key is never left on disk. In Docker, put the files in `certs/tak/` and use `/certs/tak/…` paths.
+A wrong password or file stops the relay at start with a clear message; `doctor.py` tests the
+handshake. Users on the TAK Server are never published to the backbone (next section).
+
+Do not feed the same devices both directly (UDP/`:8087`) and through the TAK Server: they would
+get every marker twice. Choose one path per device.
+
 ## TAK → backbone (PLI)
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TAK_INGEST` | `0` | `1`: publish friendly CoT to `<slot>/tak/pli/v1/<uid>` |
 | `TAK_INGEST_TYPES` | `a-f-` | Comma-separated type prefixes accepted |
+| `TAK_INGEST_FROM` | `local` (`multicast` mode: `local,lan`) | Which links may publish: `local` (UDP input, clients on `:8087`), `lan` (multicast group, only with `TAK_INGEST_UIDS`), `server` (TAK Server link). Comma-separated |
+| `TAK_INGEST_UIDS` | empty | Comma-separated uids allowed to publish (e.g. `ANDROID-abc123`). Empty = any local device |
 | `TAK_UDP_IN_PORT` | `0` (compose: `6971`) | UDP port for CoT from TAK clients (e.g. TAK app output) |
 
 Events from TCP clients connected to `:8087` are read as well. At most 1 Hz per uid; tasking
 (`t-*`) and non-friendly types are never published. This writes to the shared backbone, so it is
 off by default.
+
+Only your own devices are published:
+
+- **TAK Server users stay on the TAK Server.** A `tcp_client` link carries every user on that
+  server. Its events go to TAK only, never to the backbone, unless `TAK_INGEST_FROM=local,server`.
+- **Allowlist.** With `TAK_INGEST_UIDS` set, only those uids are published, even if a terminal
+  forwards other users' positions.
+- **No echo.** A uid the relay itself sent to TAK in the last 60 s is not published back.
+
+Drops are counted in `gateway_ingest_dropped_total{reason="not-local"|"not-allowed"|"echo"|"relayed"}` (`relayed`: the
+event carries another relay's tag, see [modes](modes.md#in-every-mode));
+`/status` shows `ingest_from` and `ingest_uids`.
 
 ## Heartbeat and health
 
@@ -102,9 +151,10 @@ been down for `GATEWAY_LOST_S` (300 s) or no sample has arrived for `GATEWAY_WAT
 
 | Path | Content |
 | --- | --- |
-| `/healthz` | 200 when the fabric link is up, else 503 |
+| `/` | Status page for people: health, reasons, outputs, traffic, drops |
+| `/healthz` | 200 when the fabric link is up, else 503 (Docker `HEALTHCHECK`) |
 | `/metrics` | Prometheus text: per-output sent/errors/dropped, drops by reason, types seen |
-| `/status` | JSON: health and reasons, counters, outputs, ingest, video |
+| `/status` | JSON: health and reasons, version, org, system, counters, outputs, ingest settings, video |
 | `/streams` | Browser view of live backbone traffic per key group, with image/video preview |
 | `/api/streams`, `/api/sample?g=`, `/api/preview?g=`, `/api/video?g=` | Data behind `/streams` |
 
@@ -136,3 +186,5 @@ Docker image.
   from TAK documentation and not yet verified on a real TAK client. The MediaMTX pipeline itself
   is verified end to end.
 - Field devices share the organisation certificate; only `GATEWAY_SYSTEM` differs per device.
+- The TAK Server link is tested against a local TLS server with a client certificate, not yet
+  against a real TAK Server.

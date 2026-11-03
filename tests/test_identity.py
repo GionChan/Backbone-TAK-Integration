@@ -59,5 +59,30 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(identity.resolve_bundle(), ("c", "k", "a"))
 
 
+    def test_router_from_bundle_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _bundle(Path(tmp), SLOT)
+            (Path(tmp) / "NOTES.md").write_text("Org: x\nRouter endpoint:     tls/router.example:7447\n")
+            cert = identity.find_bundle(tmp)[0]
+            self.assertEqual(identity.router_for(cert), "tls/router.example:7447")
+            os.environ["GOAT_ROUTER"] = "tls/override:7447"
+            self.assertEqual(identity.router_for(cert), "tls/override:7447")
+        os.environ.pop("GOAT_ROUTER")
+        self.assertEqual(identity.router_for(None), identity.DEFAULT_ROUTER)
+
+    def test_downloaded_bundle_used_only_when_unambiguous(self):
+        with tempfile.TemporaryDirectory() as home, \
+                mock.patch.object(identity, "cert_dirs", return_value=[]), \
+                mock.patch("os.path.expanduser", return_value=home):
+            first = Path(home, "Downloads", "efdi-onboarding-a")
+            first.mkdir(parents=True)
+            _bundle(first, SLOT)
+            self.assertTrue(identity.resolve_bundle()[0].startswith(str(first)))
+            second = Path(home, "Downloads", "efdi-onboarding-b")
+            second.mkdir()
+            _bundle(second, SLOT)
+            self.assertEqual(identity.resolve_bundle(), (None, None, None))
+
+
 if __name__ == "__main__":
     unittest.main()

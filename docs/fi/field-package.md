@@ -15,6 +15,10 @@ python tools/make_relay_package.py --system field-relay-01                   # �
 | Valitsin | Oletus | Merkitys |
 | --- | --- | --- |
 | `--system` | pakollinen | Laitteen yksilöllinen nimi: `GATEWAY_SYSTEM`, heartbeat-topic, tiedostonimi |
+| `--lang` | kysytään asennuksessa | `fi` tai `en`: asentimen ja sen viestien kieli |
+| `--mode` | kysytään asennuksessa | `direct`, `multicast` tai `server` ([tilat](modes.md)) |
+| `--tak-server`, `--tak-p12`, `--tak-trust-p12` | – | `server`-tila: osoite ja .p12-tiedostot (kopioidaan kansioon `certs/tak/`). Salasana kysytään asennuksessa |
+| `--ingest-uids` | – | `TAK_INGEST_UIDS`: laitteiden uidit, joiden sijainnin saa julkaista |
 | `--cert-dir` | `./certs` | Mukaan otettava bundle (yksi sertifikaatti- ja avainpari + CA) |
 | `--tak-host`, `--tak-udp-port` | `127.0.0.1`, `6969` | Missä TAK-pääte kuuntelee CoT:tä |
 | `--tak-port` | `8087` | TCP-striimin portti |
@@ -24,7 +28,8 @@ python tools/make_relay_package.py --system field-relay-01                   # �
 
 Paketissa ovat `app/` (relayn moduulit muuttamattomina), `certs/`, `device.env` (kaikki
 asetukset, myös sertifikaatista luettu slot), `bootstrap.ps1`, `run.ps1`, `install.cmd/.ps1`,
-`uninstall.cmd/.ps1` ja suomenkielinen pikaohje. Rekisteröi järjestelmänimi **ennen**
+`uninstall.cmd/.ps1`, `lang.ps1` (kaikki viestit suomeksi ja englanniksi) sekä ohjeet
+molemmilla kielillä. Skriptit ovat kansiossa `tools/field_package/`. Rekisteröi järjestelmänimi **ennen**
 toimitusta, muuten heartbeat näkyy tuntemattomana.
 
 **ZIP sisältää yksityisen avaimen.** Siirrä se kuin salaisuus; `dist/` on rajattu
@@ -33,23 +38,38 @@ versionhallinnan ulkopuolelle.
 ## Asennus laitteelle
 
 1. Liity meshiin (`netbird up …`); reitittimen nimi ratkeaa vain sen sisällä.
-2. Pura paketti ja kaksoisnapsauta `install.cmd`. Se luo virtuaaliympäristön, asentaa
-   `eclipse-zenoh`:n, rekisteröi automaattisen käynnistyksen ja käynnistää relayn heti.
+2. Pura paketti ja kaksoisnapsauta `install.cmd`. Se kysyy tässä järjestyksessä:
+   1. **Kielen** (Suomi / English). Kaikki tämän jälkeen, myös myöhemmät käynnistykset ja
+      poisto, tapahtuu valitulla kielellä.
+   2. **Tilan:** suora, lähiverkko tai TAK Server ([tilat](modes.md)).
+   3. **Tilan lisätiedot:** TAK Serverin osoite, .p12-tiedostot ja salasana; lähiverkkotilassa
+      niiden laitteiden uidit, joiden sijainnin saa julkaista.
+
+   Mitä on valittu valmiiksi `make_relay_package.py`:llä, sitä ei kysytä. Vastaukset tallentuvat
+   tiedostoon `device.env`. Sen jälkeen asennin luo virtuaaliympäristön, asentaa
+   `eclipse-zenoh`:n (TAK Server -tilassa myös `cryptography`:n), rekisteröi automaattisen
+   käynnistyksen, käynnistää relayn ja kertoo, mitä TAKiin pitää asettaa.
    - Automaattinen käynnistys yrittää ensin ajastettua tehtävää (kirjautuessa, ei
      ylläpito-oikeuksia). Jos tili ei saa luoda ajastettuja tehtäviä, asennus käyttää
      Käynnistys-kansion pikakuvaketta.
    - Kioskikoneet ilman kirjautunutta käyttäjää: `install.ps1 -AtSystemStartup`
      ylläpitäjän PowerShellissä (käynnistyy järjestelmän mukana SYSTEM-tilillä).
-3. Ohjaa päätteen CoT-tulo `device.env`-tiedoston porttiin `TAK_UDP_PORT` (TAK-sovelluksen oletus 6969)
-   ja tarvittaessa sen UDP-ulostulo porttiin `TAK_UDP_IN_PORT` PLI:tä varten.
-4. Tarkista `http://localhost:8088/status` → `"healthy": true`. Lokit:
+3. Vain suorassa tilassa: ohjaa päätteen CoT-tulo `device.env`-tiedoston porttiin `TAK_UDP_PORT`
+   (TAK-sovelluksen oletus 6969) ja tarvittaessa sen UDP-ulostulo porttiin `TAK_UDP_IN_PORT` PLI:tä
+   varten. Lähiverkko- ja TAK Server -tiloissa TAKiin ei aseteta mitään.
+4. Avaa <http://localhost:8088/>: tilasivulla pitää lukea **Healthy**. Lokit:
    `logs/relay-VVVVKKPP.log`.
 
-Asetusten muuttaminen: muokkaa `device.env`-tiedostoa, aja `uninstall.cmd` ja sitten
-`install.cmd`. `uninstall` poistaa kumman tahansa käynnistystavan ja pysäyttää sekä
+Asetusten muuttaminen: muokkaa `device.env`-tiedostoa (poista rivi `TAK_MODE` tai `RELAY_LANG`,
+jos haluat, että se kysytään uudelleen), aja `uninstall.cmd` ja sitten `install.cmd`.
+`device.env` voi sisältää TAK Server -varmenteen salasanan, joten suojaa kansio kuten avain. `uninstall` poistaa kumman tahansa käynnistystavan ja pysäyttää sekä
 käynnistinsilmukan että relayn.
 
-`run.ps1 -CheckOnly` tarkistaa Pythonin, zenohin ja sertifikaatit käynnistämättä relayta.
+`run.ps1 -CheckOnly` ajaa `doctor.py`-tarkistuksen (Python, zenoh, sertifikaatit, NetBird, reititin,
+portit) käynnistämättä relayta ja kertoo jokaiseen virheeseen korjauksen.
+
+Jos haluat julkaista vain laitteen oman sijainnin, poista risuaita `device.env`-tiedoston
+`TAK_INGEST_UIDS`-riviltä ja kirjoita päätteen uid.
 
 Koko sykli (asennus → terve tila oikeaa fabricia vasten ja CoT useilta valmistajilta → poisto →
 ei uudelleenkäynnistystä) on varmistettu Windows-kenttälaitteilla.

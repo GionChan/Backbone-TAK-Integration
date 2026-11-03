@@ -14,7 +14,10 @@ Product = `relay/`. Everything in `demo/` is demonstration only.
 relay/                  PRODUCT. Must not import from demo/ or tools/.
   tak_gateway.py        entry point; subscriptions, outputs, PLI ingest, HTTP ops, watchdog
   goat_connect.py       make_config() -> (zenoh.Config, is_real); ORG, KEY_PREFIX, ROUTER, LOCAL_ROUTER
-  identity.py           bundle + org slot discovery; stdlib only (imported by tools/ without zenoh)
+  identity.py           bundle, org slot, router (NOTES.md) discovery; stdlib only
+  tak_links.py          TAK_MODE -> outputs(); UDP targets, multicast, TAK_SERVER*, ssl_context() incl. .p12; stdlib only
+  doctor.py             preflight CLI (no zenoh needed); never writes to the fabric
+  status_page.py        HTML served at GET /
   backbone_cot.py       vendor format detection -> CoT; make_cot()
   cot_guard.py          validate_cot(), RateLimiter (thread-safe)
   symbology.py heartbeat.py stream_view.py video_relay.py gateway_core.py make_atak_package.py
@@ -28,6 +31,7 @@ demo/
   edge_ai/              edge-AI demo (own Dockerfile; copies relay/heartbeat.py + identity.py)
   run-backbone-demo.ps1 setup-certs.ps1
 tools/                  make_relay_package.py (field ZIP), register_portal_topics.py (WRITES PORTAL)
+  field_package/        installer scripts + READMEs for the ZIP; lang.ps1 holds every message (fi, en)
 tests/                  unittest; e2e_gateway.py needs a local router
 docker-compose.yml      default = relay only; profiles: demo, edge, edge-api
 Dockerfile              targets: relay, demo; layout /opt/tak/{relay,demo}; runs as UID 10001
@@ -39,6 +43,7 @@ Dockerfile              targets: relay, demo; layout /opt/tak/{relay,demo}; runs
 pip install -r relay/requirements.txt
 python -m unittest discover -s tests                     # must pass before any commit
 python -m compileall -q relay demo tools tests
+python relay/doctor.py                                   # preflight; exit 1 on failures
 python demo/local_router.py &                            # or: docker compose --profile demo up -d zenoh-router
 python tests/e2e_gateway.py                              # prints "GATEWAY E2E PASSED"
 docker compose up -d                                     # relay only
@@ -66,13 +71,21 @@ CI: .github/workflows/tests.yml, windows-latest + ubuntu-latest, Python 3.12.
 7. Heartbeat `<org>/<system>/heartbeat/v1`, interval <= 900 s, `status` from a real health check.
 8. Never commit `certs/`, `*.pem`, `*.key`, `*.cbor`, `dist/`, `.env`. Field ZIPs contain the key.
 9. Do not hardcode an org slot, a person's name or a home-directory path; use identity.py.
+10. PLI ingest publishes only local devices: `_reader(..., kind="server")` for TAK Server links,
+    filtered by `INGEST_FROM` (default local), `INGEST_UIDS` and the echo guard (`_forwarded`).
+    A TAK Server carries other users' positions; never publish them by default. Kind "lan"
+    (multicast) is published only for uids in INGEST_UIDS. Events with RELAY_TAG are never published.
+11. dispatch() tags every outgoing CoT with RELAY_TAG (loop protection between relays).
+12. Field-package messages live in tools/field_package/lang.ps1 with the same keys in fi and en
+    (test_same_keys_in_fi_and_en, test_used_keys_exist). Never hard-code user text in the .ps1.
 
 ## Configuration surface
 
 Env vars are documented in docs/en/relay.md (single source; update it when adding one).
-Identity: GOAT_CERT/KEY/CA, GOAT_CERT_DIR (exclusive when set), GOAT_ORG, GOAT_ROUTER (tls/),
-GOAT_LOCAL_ROUTER (tcp/). Outputs: TAK_UDP_TARGETS, TAK_PORT, GATEWAY_CONFIG. Ingest:
-GATEWAY_INGEST_ALL, TAK_INGEST, TAK_UDP_IN_PORT. Ops: GATEWAY_HTTP_PORT, GATEWAY_SYSTEM,
+Identity: GOAT_CERT/KEY/CA, GOAT_CERT_DIR (exclusive when set), GOAT_ORG, GOAT_ROUTER (tls/; else NOTES.md),
+GOAT_LOCAL_ROUTER (tcp/). Mode: TAK_MODE (direct|multicast|server, docs/en/modes.md), TAK_LOCAL_OUTPUTS, TAK_MULTICAST_*.
+Outputs: TAK_UDP_TARGETS, TAK_PORT, TAK_SERVER*, GATEWAY_CONFIG. Ingest:
+GATEWAY_INGEST_ALL, TAK_INGEST, TAK_INGEST_FROM, TAK_INGEST_UIDS, TAK_UDP_IN_PORT. Ops: GATEWAY_HTTP_PORT, GATEWAY_SYSTEM,
 GATEWAY_WATCHDOG_S, GATEWAY_LOST_S. Video: GATEWAY_VIDEO*.
 
 ## Key spaces
@@ -92,6 +105,7 @@ Spec: docs/asyncapi-tak-gateway.yaml.
 - New env var or behaviour: update docs/en/relay.md AND docs/fi/relay.md, CHANGELOG.md, tests.
 - New relay module: add to APP_FILES; tests enforce it.
 - New scenario: demo/scenarios/<name>.py using sender.Sender; document in docs/*/demo.md.
+- New installer message: add the key to BOTH fi and en in lang.ps1.
 - Docs exist in two languages with the same file names (docs/en/X.md <-> docs/fi/X.md); keep
   them in sync. Finnish follows Kielitoimisto rules.
 - tools/register_portal_topics.py --apply and anything publishing to the real fabric affect a
@@ -101,3 +115,6 @@ Spec: docs/asyncapi-tak-gateway.yaml.
 
 ATAK connection package format and CoT `<video>` element on a real TAK client. Edge-AI demo CoT
 is not exercise-labelled (README there says to set EDGE_COT_AFFIL=u).
+TAK_MODE=multicast with real TAK devices (tested only over loopback); TAK_MODE=server against a
+real TAK Server (tested against a local TLS server); the field-package installer on Windows
+(scripts are parse-checked in CI only).

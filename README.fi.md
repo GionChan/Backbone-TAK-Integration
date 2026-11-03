@@ -39,14 +39,24 @@ Edellytykset: NetBird-yhteys EFDI-meshiin, Docker ja oma onboarding-bundle.
 mkdir certs && cp /polku/bundleen/{*-cert.pem,*-key.pem,efdi-ca-root.pem} certs/
 cp .env.example .env           # valinnainen: TAK-kohteet, järjestelmänimi, PLI
 docker compose up -d           # käynnistää pelkän relayn
-curl localhost:8088/status     # "healthy": true, kun yhteys on ylhäällä ja dataa tulee
+docker compose exec tak-relay python3 relay/doctor.py   # esitarkistus: kertoo ongelman ja korjauksen
 ```
 
-Ohjaa TAK-sovellus relayhin:
+Tilasivu on osoitteessa <http://localhost:8088/>. Se muuttuu vihreäksi, kun yhteys on ylhäällä
+ja dataa tulee.
+
+Valitse `.env`-tiedostossa `TAK_MODE`-muuttujalla, miten TAK-laitteet saavat tilannekuvan:
+`direct` (oletus), `multicast` (TAKiin ei aseteta mitään, vain suljetut verkot) tai `server` (syötä
+TAK Serveriä). Ks. [tilan valinta](docs/fi/modes.md). `direct`-tilassa ohjaa TAK-sovellus relayhin:
 
 - **TAK app:** UDP-tulo 6969 Docker-isännällä (oletuskohde).
 - **WinTAK:** lisää `host.docker.internal:4242` muuttujaan `TAK_UDP_TARGETS` (`.env`).
 - **ATAK tai WinTAK TCP:llä:** TAK Server → TCP Streaming → `<relayn-osoite>:8087`.
+- **TAK Server:** aseta `.env`-tiedostoon `TAK_SERVER` ja sen .p12-tiedostot. Silloin jokainen
+  serverin käyttäjä näkee backbonen. Ks. [relay: TAK Server](docs/fi/relay.md#tak-server).
+
+Backboneen menevät vain omien laitteiden sijainnit ja vain, kun `TAK_INGEST=1`. TAK Serverin
+käyttäjien sijainteja ei julkaista koskaan.
 
 Kenttälaitteet ilman Dockeria: itseasentuva paketti komennolla
 `python tools/make_relay_package.py --system <nimi>`, ks. [kenttäpaketti](docs/fi/field-package.md).
@@ -73,6 +83,7 @@ sertifikaatteja kaikki toimii paikallista reititintä vasten ilman verkkoyhteytt
 | | Suomi | English |
 | --- | --- | --- |
 | Yleiskuva ja arkkitehtuuri selkokielellä | [yleiskuva](docs/fi/overview.md) | [overview](docs/en/overview.md) |
+| Tilan valinta: suora, lähiverkko (multicast) tai TAK Server | [tilat](docs/fi/modes.md) | [modes](docs/en/modes.md) |
 | Relay: asetukset, topicit, operointi, tietoturva | [relay](docs/fi/relay.md) | [relay](docs/en/relay.md) |
 | Demo: skenaariot, lähetin, näkymät | [demo](docs/fi/demo.md) | [demo](docs/en/demo.md) |
 | Kenttälaitepaketti (Windows, ei Dockeria) | [kenttäpaketti](docs/fi/field-package.md) | [field package](docs/en/field-package.md) |
