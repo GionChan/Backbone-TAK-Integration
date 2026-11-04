@@ -13,7 +13,7 @@
 | **For** | This machine or a few named devices | A closed LAN of your own | An organisation with a TAK Server |
 | **What to set in TAK** | One input port: UDP 6969, 4242 (WinTAK) or TCP 8087 | Nothing | Nothing; devices are already on the server |
 | **Who sees the backbone** | Only those devices | **Everyone on the LAN segment** | Every user on the server |
-| **Whose position is published** (`TAK_INGEST=1`) | Local devices (or `TAK_INGEST_UIDS`) | Only uids in `TAK_INGEST_UIDS` | Nobody by default |
+| **Whose position is published** (`TAK_INGEST=1`) | TAK apps on this machine (or `TAK_INGEST_UIDS`) | Only uids in `TAK_INGEST_UIDS` | Nobody by default |
 | **Docker** | Yes | Linux host network only | Yes |
 | **Required** | — | — | `TAK_SERVER` and its .p12 files |
 

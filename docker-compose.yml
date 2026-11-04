@@ -30,7 +30,7 @@ services:
   tak-relay:
     <<: *fabric
     build: {context: ., target: relay}
-    image: efdi-tak-relay:1.1.1
+    image: efdi-tak-relay:1.1.2
     environment:
       <<: *fabric-env
       GATEWAY_SYSTEM: ${GATEWAY_SYSTEM:-tak-gateway}
@@ -62,7 +62,7 @@ services:
       GATEWAY_VIDEO_PORT: "8554"
     ports:
       - "8087:8087"       # CoT TCP stream (ATAK/WinTAK "TAK Server -> TCP")
-      - "8088:8088"       # /healthz /metrics /status /streams
+      - "127.0.0.1:8088:8088"   # /healthz /metrics /status /streams: this machine only (no auth)
       - "6971:6971/udp"   # CoT in from TAK clients (PLI ingest)
       - "8554:8554"       # RTSP (GATEWAY_VIDEO=1)
     restart: unless-stopped

@@ -232,7 +232,7 @@ def check_tak_side(m) -> None:
     ingest = os.environ.get("TAK_INGEST", "0") == "1"
     sources = os.environ.get("TAK_INGEST_FROM") or tak_links.default_ingest_from(m or "direct")
     uids = os.environ.get("TAK_INGEST_UIDS", "")
-    detail = f"on, from {sources}, devices {uids or 'any local'}" if ingest else "off (nothing is published from TAK)"
+    detail = f"on, from {sources}, devices {uids or 'on this machine only'}" if ingest else "off (nothing is published from TAK)"
     report("WARN" if ingest and "server" in sources else "INFO", "PLI to backbone", detail,
            "TAK_INGEST_FROM=server publishes every TAK Server user's position to the backbone")
 

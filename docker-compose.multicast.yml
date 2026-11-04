@@ -11,3 +11,5 @@ services:
     ports: !reset []
     environment:
       TAK_MODE: multicast
+      # Host network: the image's 0.0.0.0 would open 8088 on every host interface.
+      GATEWAY_HTTP_BIND: 127.0.0.1

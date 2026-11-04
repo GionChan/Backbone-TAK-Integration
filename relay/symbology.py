@@ -102,7 +102,7 @@ def suffix(text="", dimension=None, sidc=None, hae=None, speed_mps=None, default
 def cot_type(text="", explicit_affiliation=None, dimension=None, sidc=None, hae=None, speed_mps=None,
              default_affiliation="u", default_dim="G", forced_type=None) -> tuple:
     """(cot_type, basis). forced_type (a valid source-provided CoT type) wins."""
-    if forced_type and re.match(r"^a-[pufansh]-", str(forced_type)):
+    if forced_type and re.fullmatch(r"a-[pufansh](-[A-Za-z0-9_]+)+", str(forced_type)):
         return str(forced_type), "source"
     aff = affiliation(explicit_affiliation, text, sidc, default_affiliation)
     suf, basis = suffix(text, dimension, sidc, hae, speed_mps, default_dim)

@@ -9,6 +9,12 @@ import os
 from datetime import datetime, timedelta, timezone
 from xml.sax.saxutils import escape
 
+
+def _attr(value) -> str:
+    """escape() for a double-quoted attribute (escape() alone leaves the quote)."""
+    return escape(str(value), {'"': "&quot;"})
+
+
 # class name (lowercase, substring match) -> CoT battle-dimension/function suffix.
 # Affiliation letter is prepended from EDGE_COT_AFFIL (h/f/n/u/s...), default h.
 _TYPE_MAP = [
@@ -59,10 +65,10 @@ def build_cot(
     typ = cot_type(label, affil)
 
     detail = [
-        f'<contact callsign="{escape(uid)}"/>',
+        f'<contact callsign="{_attr(uid)}"/>',
         f'<status readiness="true"/>',
         f'<precisionlocation altsrc="CALC" geopointsrc="CALC"/>',
-        f'<_flow-tags_ efdi-edge-ai="{escape(node_id)}/{escape(model)} '
+        f'<_flow-tags_ efdi-edge-ai="{_attr(node_id)}/{_attr(model)} '
         f'{_iso(now)}"/>',
     ]
     trk = []
@@ -79,8 +85,8 @@ def build_cot(
         detail.append(f"<sensor {sat}/>")
     if parent_uid:
         detail.append(
-            f'<link uid="{escape(parent_uid)}" production_time="{_iso(now)}" '
-            f'relation="p-p" type="{escape(parent_type or "a-f-G")}"/>'
+            f'<link uid="{_attr(parent_uid)}" production_time="{_iso(now)}" '
+            f'relation="p-p" type="{_attr(parent_type or "a-f-G")}"/>'
         )
     rmk = (
         f"EDGE-AI {label} p={conf:.2f} | node={node_id} model={model} "
@@ -90,7 +96,7 @@ def build_cot(
 
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        f'<event version="2.0" uid="{escape(uid)}" type="{typ}" how="m-c" '
+        f'<event version="2.0" uid="{_attr(uid)}" type="{_attr(typ)}" how="m-c" '
         f'time="{_iso(now)}" start="{_iso(now)}" stale="{_iso(stale)}">'
         f'<point lat="{lat:.7f}" lon="{lon:.7f}" hae="{hae:.1f}" '
         f'ce="{ce_m:.1f}" le="{le_m:.1f}"/>'

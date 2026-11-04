@@ -49,6 +49,8 @@ class SymbologyTests(unittest.TestCase):
     def test_source_type_wins(self):
         self.assertEqual(t("whatever", forced_type="a-h-A-M-F-Q"), "a-h-A-M-F-Q")
         self.assertEqual(t("drone", forced_type="junk"), "a-u-A-M-F-Q")  # invalid forced type ignored
+        # A quote in a source-provided type must not reach the CoT attribute.
+        self.assertEqual(t("drone", forced_type='a-f-G" x="y'), "a-u-A-M-F-Q")
 
     def test_no_false_friend_from_common_words(self):
         self.assertEqual(s.affiliation(text="Sam owns his own vehicle"), "u")

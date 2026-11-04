@@ -44,7 +44,7 @@ def make_cot(uid, typ, lat, lon, hae=0.0, ce=50.0, course=None, speed=None,
     detail = (f'<contact callsign="{_attr(callsign or uid)}"/>{track}'
               f'<remarks>{escape(remarks)}</remarks>')
     xml = (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-           f'<event version="2.0" uid="{_attr(uid)}" type="{typ}" how="{how}" '
+           f'<event version="2.0" uid="{_attr(uid)}" type="{_attr(typ)}" how="{_attr(how)}" '
            f'time="{_iso(now)}" start="{_iso(now)}" stale="{_iso(now + stale_s)}">'
            f'<point lat="{float(lat):.7f}" lon="{float(lon):.7f}" hae="{float(hae):.1f}" '
            f'ce="{float(ce):.1f}" le="9999999.0"/><detail>{detail}</detail></event>')

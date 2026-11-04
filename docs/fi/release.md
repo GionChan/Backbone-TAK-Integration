@@ -43,7 +43,9 @@ luku ja composen image-tagi eivät täsmää.
    `PATH`-polusta: varmenne `.zip`-tiedostosta, laitteen nimi kirjoitetaan, relay käy paketin
    omalla Pythonilla ja poistetaan lopuksi.
 
-Puskut `feature/**`-haaroihin ajavat kaiken tämän kuivaharjoituksena julkaisematta mitään.
+Image ja GitHub Release julkaistaan vasta, kun kaikki neljä tarkistusta ovat menneet läpi, joten
+epäonnistunut tarkistus ei jätä mitään julkaistuksi. Puskut `feature/**`-haaroihin ajavat kaiken
+tämän kuivaharjoituksena julkaisematta mitään.
 
 ## Laitekohtaiset paketit
 

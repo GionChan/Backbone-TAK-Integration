@@ -21,8 +21,9 @@ def validate_cot(data: bytes, now: float = None):
     """Return (True, "") or (False, reason)."""
     if len(data) > MAX_BYTES:
         return False, "too-large"
-    head = data.lstrip()[:4096].lower()
-    if b"<!doctype" in head or b"<!entity" in head:
+    # Anywhere, not just at the start: a comment can push a DTD past any prefix check.
+    lower = data.lower()
+    if b"<!doctype" in lower or b"<!entity" in lower:
         return False, "dtd-not-allowed"
     try:
         ev = ET.fromstring(data.strip())

@@ -60,7 +60,8 @@ with sender.open_session("my-scenario") as s:
 
 The launcher checks the mesh, starts the relay with demo settings (CoT by UDP to 6969 and to
 WinTAK on 4242, PLI ingest and video on), the demo profile, and the strike-package scenario
-natively. Logs go to `logs/`.
+natively. Logs go to `logs/`. The relay runs in Docker, so PLI from TAK apps on the host is
+published only for uids in `TAK_INGEST_UIDS` (set it in the shell before starting).
 
 ### Any OS
 

@@ -50,7 +50,7 @@ found and exactly one such directory exists. With several, set `GOAT_CERT_DIR`.
 | `GATEWAY_INGEST_ALL` | `0` natively, `1` in compose | `1`: subscribe `**` and convert every recognised format. `0`: only `GATEWAY_COT_KE` |
 | `GATEWAY_COT_KE` | `*/tak/cot/v1/**` | Ready-made CoT from any vendor (when `GATEWAY_INGEST_ALL=0`) |
 | `GATEWAY_SOURCES` | all | Subset of `xml,geotrack,consilium,mavlink,hymots,orion,adsb,alerts,roi,proto` ([formats](#recognised-formats)) |
-| `GATEWAY_HYMOTS_INTERVAL_S` | `10` | Minimum interval per HYMOTS track |
+| `GATEWAY_HYMOTS_INTERVAL_S` | `10` | Minimum interval per track of the `hymots` source |
 | `XV_MAX_HZ_PER_UID` | `2` | Rate limit per uid for `GATEWAY_COT_KE` traffic |
 | `COT_TYPE` | `a-h-A-M-F-Q` | Fallback CoT type |
 
@@ -83,9 +83,10 @@ PLI are never converted.
 | `TAK_MODE` | `direct` | `direct`, `multicast` or `server` |
 | `TAK_LOCAL_OUTPUTS` | `0` | `server` mode: `1` keeps the UDP and TCP outputs too |
 | `TAK_MULTICAST_GROUP`, `TAK_MULTICAST_IF`, `TAK_MULTICAST_TTL` | `239.2.3.1:6969`, OS default, `1` | `multicast` mode, see [modes](modes.md#multicast) |
-| `TAK_UDP_TARGETS` | `TAK_HOST:TAK_UDP_PORT` | `host:port[,host:port…]` CoT by UDP. TAK app 6969, WinTAK 4242 |
+| `TAK_UDP_TARGETS` | `TAK_HOST:TAK_UDP_PORT` | `host:port[,host:port…]` CoT by UDP. Default port 6969; WinTAK listens on 4242 |
 | `TAK_HOST`, `TAK_UDP_PORT` | `127.0.0.1`, `6969` | Single UDP target (older form) |
 | `TAK_PORT` | `8087` | TCP server for ATAK/WinTAK streaming clients |
+| `TAK_MAX_CLIENTS` | `64` | Most TCP clients at once; further connections are refused |
 | `TAK_SERVER` | — | `host[:port]` of a TAK Server to stream to (see below) |
 | `GATEWAY_CONFIG` | — | JSON file replacing all of the above |
 
@@ -131,8 +132,8 @@ get every marker twice. Choose one path per device.
 | `TAK_INGEST` | `0` | `1`: publish friendly CoT to `<slot>/tak/pli/v1/<uid>` |
 | `TAK_INGEST_TYPES` | `a-f-` | Comma-separated type prefixes accepted |
 | `TAK_INGEST_FROM` | `local` (`multicast` mode: `local,lan`) | Which links may publish: `local` (UDP input, clients on `:8087`), `lan` (multicast group, only with `TAK_INGEST_UIDS`), `server` (TAK Server link). Comma-separated |
-| `TAK_INGEST_UIDS` | empty | Comma-separated uids allowed to publish (e.g. `ANDROID-abc123`). Empty = any local device |
-| `TAK_UDP_IN_PORT` | `0` (compose: `6971`) | UDP port for CoT from TAK clients (e.g. TAK app output) |
+| `TAK_INGEST_UIDS` | empty | Comma-separated uids allowed to publish (e.g. `ANDROID-abc123`). Empty = only TAK apps on this machine (loopback) |
+| `TAK_UDP_IN_PORT` | `0` (compose: `6971`) | UDP port for CoT from TAK clients (their UDP output) |
 
 Events from TCP clients connected to `:8087` are read as well. At most 1 Hz per uid; tasking
 (`t-*`) and non-friendly types are never published. This writes to the shared backbone, so it is
@@ -142,11 +143,18 @@ Only your own devices are published:
 
 - **TAK Server users stay on the TAK Server.** A `tcp_client` link carries every user on that
   server. Its events go to TAK only, never to the backbone, unless `TAK_INGEST_FROM=local,server`.
+- **This machine only, unless listed.** Without `TAK_INGEST_UIDS` only events from this machine
+  (127.0.0.1) are published. Anyone else on the network could otherwise put positions on the
+  backbone under your slot. To publish a device on another machine, list its uid.
 - **Allowlist.** With `TAK_INGEST_UIDS` set, only those uids are published, even if a terminal
-  forwards other users' positions.
+  forwards other users' positions. A uid is what the device says it is, so the list limits
+  mistakes, not a deliberate forger: keep ports 6971 and 8087 off untrusted networks.
 - **No echo.** A uid the relay itself sent to TAK in the last 60 s is not published back.
 
-Drops are counted in `gateway_ingest_dropped_total{reason="not-local"|"not-allowed"|"echo"|"relayed"}` (`relayed`: the
+In Docker, packets from the host do not come from 127.0.0.1, so `TAK_INGEST=1` there needs
+`TAK_INGEST_UIDS`.
+
+Drops are counted in `gateway_ingest_dropped_total{reason="not-local"|"not-loopback"|"not-allowed"|"echo"|"relayed"}` (`relayed`: the
 event carries another relay's tag, see [modes](modes.md#in-every-mode));
 `/status` shows `ingest_from` and `ingest_uids`.
 
@@ -163,6 +171,12 @@ Watchdog: the process exits (Docker or the field launcher restarts it) when the 
 been down for `GATEWAY_LOST_S` (300 s) or no sample has arrived for `GATEWAY_WATCHDOG_S` (300 s).
 
 ## HTTP endpoints (`GATEWAY_HTTP_PORT`, default 8088)
+
+The HTTP port listens on `GATEWAY_HTTP_BIND`, by default `127.0.0.1` (this machine only), because
+it has no authentication and `/api/sample` returns backbone payloads. The Docker image sets
+`0.0.0.0` inside the container and `docker-compose.yml` publishes the port on the host's
+`127.0.0.1` only. To reach it from another machine, set `GATEWAY_HTTP_BIND=0.0.0.0` (native) or
+change the compose mapping, and limit access with a firewall.
 
 | Path | Content |
 | --- | --- |
@@ -186,9 +200,12 @@ Docker image.
 
 - **Certificates** (`certs/`, `*.pem`, `*.key`, `*.cbor`) and **field packages** (`dist/`) are
   git-ignored: they hold the private key. Never commit or share them.
-- **Ports 8087, 8088, 6971 and 8554 have no authentication.** `/api/sample` returns buffered
-  backbone payloads. Expose them only on the local machine or a trusted network, and firewall
-  them elsewhere.
+- **Ports 8087, 8088, 6971 and 8554 have no authentication.** This is how TAK's plain CoT
+  inputs work: TAK devices on the network must reach 8087, 6971 and 8554, so those listen on
+  all interfaces. 8088 (`/api/sample` returns buffered backbone payloads) listens on this machine
+  only by default. Keep the relay on a network you trust, and firewall the ports elsewhere.
+- **TCP clients are capped** at `TAK_MAX_CLIENTS` (64); further connections are refused
+  (`gateway_output_rejected_total`).
 - **Least privilege on the fabric.** The relay reads widely (`**` with `GATEWAY_INGEST_ALL=1`)
   but writes only heartbeats and, with `TAK_INGEST=1`, PLI under your own slot.
 - **Untrusted input.** Other vendors' CoT is validated before forwarding (no DTD, size and

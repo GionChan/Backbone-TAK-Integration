@@ -47,10 +47,14 @@ class StreamViewTests(unittest.TestCase):
         self.assertEqual(st.snapshot(now=2)["groups"], sv.MAX_GROUPS)
 
 
-if __name__ == "__main__":
-    unittest.main()
+try:
+    import PIL  # noqa: F401  optional dependency (relay/requirements.txt)
+    HAVE_PIL = True
+except ImportError:
+    HAVE_PIL = False
 
 
+@unittest.skipUnless(HAVE_PIL, "pillow not installed (optional)")
 class ExtractImageTests(unittest.TestCase):
     def _jpeg(self):
         import io
@@ -72,3 +76,7 @@ class ExtractImageTests(unittest.TestCase):
         self.assertIsNone(sv.extract_image(b'{"a": 1}'))
         self.assertIsNone(sv.extract_image(b"<event/>"))
         self.assertIsNone(sv.video_frame_jpeg(b"not a stream"))
+
+
+if __name__ == "__main__":
+    unittest.main()

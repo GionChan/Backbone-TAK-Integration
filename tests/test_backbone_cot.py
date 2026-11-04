@@ -31,6 +31,12 @@ def check_valid(xml):
 
 
 class ConvertTests(unittest.TestCase):
+    def test_make_cot_escapes_type_and_how(self):
+        ev = check_valid(b.make_cot("u1", 'a-f-G" x="y', 60, 25, how='m-g" z="1'))
+        self.assertEqual(ev.get("type"), 'a-f-G" x="y')   # kept as one value, no new attribute
+        self.assertIsNone(ev.get("x"))
+        self.assertIsNone(ev.get("z"))
+
     def test_geotrack(self):
         j = {"schema": "goat.geo.track.v1", "id": "synth:900", "label": "900", "lat": 50.01, "lon": 8.36,
              "alt_m": 2222.6, "course_deg": 50.0, "speed_mps": 19.6, "affiliation": "unknown",

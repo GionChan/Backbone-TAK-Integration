@@ -26,7 +26,7 @@ JSON-muodossa: `reasons` kertoo, mikä on vialla, ja `counters` näyttää, minn
 | `port is already allocated` | Jokin muu prosessi käyttää porttia 8087, 8088, 6971, 8554, 8080 tai 7447 | Pysäytä se tai vaihda porttimäärityksen isäntäpuoli |
 | `output tcp_client:… not connected` | TAK Server ei vastaa tai hylkää varmenteen | `doctor.py` kertoo syyn; tarkista `TAK_SERVER_P12`, truststore ja `TAK_SERVER_VERIFY_HOSTNAME` |
 | Käynnistyksessä `cannot open .p12 (wrong password?)` | Väärä `TAK_SERVER_P12_PASSWORD` | Korjaa salasana. Truststore käyttää samaa salasanaa, ellei `TAK_SERVER_TRUST_PASSWORD` ole asetettu |
-| PLI:tä ei julkaista, `reason="not-local"` / `"not-allowed"` / `"echo"` | Tarkoituksellista: TAK Serverin käyttäjät, `TAK_INGEST_UIDS`-listan ulkopuoliset uidit, relayn itse lähettämät merkit | Lisää laitteen uid muuttujaan `TAK_INGEST_UIDS` |
+| PLI:tä ei julkaista, `reason="not-local"` / `"not-loopback"` / `"not-allowed"` / `"echo"` | Tarkoituksellista: TAK Serverin käyttäjät, muiden koneiden laitteet (Dockerissa myös isäntä) ilman `TAK_INGEST_UIDS`-listaa, listan ulkopuoliset uidit, relayn itse lähettämät merkit | Lisää laitteen uid muuttujaan `TAK_INGEST_UIDS` |
 | `PermissionError` avaimelle (Linux) | Kontti ajetaan käyttäjänä UID 10001 | `chmod 640` avaimelle ja lukuoikeus ryhmälle 10001, tai `user: "0"` palvelulle |
 | Heartbeat ei näy portaalissa | Järjestelmänimeä ei ole rekisteröity | `python tools/register_portal_topics.py --add-system <nimi> --apply` |
 | Kenttälaite: automaattinen käynnistys puuttuu | Ajastetut tehtävät estetty käytännöllä | Asennus käyttää silloin Käynnistys-kansiota; tarkista asennuksen tuloste |

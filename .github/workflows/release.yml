@@ -4,6 +4,7 @@ name: Release
 #   - image ghcr.io/<owner>/efdi-tak-relay:X.Y.Z, :X.Y, :latest (linux/amd64 + linux/arm64,
 #     SBOM and provenance attached). A new GHCR package of a private repo is private.
 #   - GitHub Release with the field-package template (no certificate inside) and SHA256SUMS.
+# Nothing is published until every check has passed: push-image and publish run last.
 # feature/** pushes and workflow_dispatch are a dry run: everything is built and tested,
 # nothing is published.
 on:
@@ -43,7 +44,42 @@ jobs:
           path: notes.md
 
   image:
+    # Build and test only. Nothing is pushed here: push-image runs after every check has passed.
     needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build (amd64 + arm64) into the cache
+        uses: docker/build-push-action@v6
+        env:
+          # No build-record artifact: publish does not need it, and its download failed in v1.1.0.
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: .
+          target: relay
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Each architecture runs (relay, doctor, mediamtx, dependencies)
+        run: |
+          for arch in amd64 arm64; do
+            docker buildx build --platform "linux/$arch" --target relay --load -t "relay-$arch" \
+              --cache-from type=gha .
+            docker run --rm --platform "linux/$arch" "relay-$arch" python3 -c \
+              "import zenoh, cryptography, av, PIL, platform; print('$arch ok', platform.machine())"
+            docker run --rm --platform "linux/$arch" "relay-$arch" mediamtx --version
+            docker run --rm --platform "linux/$arch" -e GOAT_LOCAL_ROUTER=tcp/127.0.0.1:1 "relay-$arch" \
+              python3 relay/doctor.py | tail -3
+          done
+
+  push-image:
+    # Only after the image, the field package and the Windows install test have all passed, so a
+    # failed check never leaves an image (or :latest) published without its release.
+    if: needs.check.outputs.publish == 'true'
+    needs: [check, image, install-template]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -58,23 +94,20 @@ jobs:
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/efdi-tak-relay"
           v="${{ needs.check.outputs.version }}"
           echo "tags=$image:$v,$image:${v%.*},$image:latest" >> "$GITHUB_OUTPUT"
-      - name: Log in to GHCR
-        if: needs.check.outputs.publish == 'true'
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build (amd64 + arm64), push only for a tag
+      - name: Push (amd64 + arm64, from the tested build cache)
         uses: docker/build-push-action@v6
         env:
-          # No build-record artifact: publish does not need it, and its download failed in v1.1.0.
           DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: .
           target: relay
           platforms: linux/amd64,linux/arm64
-          push: ${{ needs.check.outputs.publish == 'true' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.title=EFDI TAK relay
@@ -85,18 +118,6 @@ jobs:
           provenance: mode=max
           sbom: true
           cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Each architecture runs (relay, doctor, mediamtx, dependencies)
-        run: |
-          for arch in amd64 arm64; do
-            docker buildx build --platform "linux/$arch" --target relay --load -t "relay-$arch" \
-              --cache-from type=gha .
-            docker run --rm --platform "linux/$arch" "relay-$arch" python3 -c \
-              "import zenoh, cryptography, av, PIL, platform; print('$arch ok', platform.machine())"
-            docker run --rm --platform "linux/$arch" "relay-$arch" mediamtx --version
-            docker run --rm --platform "linux/$arch" -e GOAT_LOCAL_ROUTER=tcp/127.0.0.1:1 "relay-$arch" \
-              python3 relay/doctor.py | tail -3
-          done
 
   field-package:
     needs: check
@@ -147,7 +168,7 @@ jobs:
 
   publish:
     if: needs.check.outputs.publish == 'true'
-    needs: [check, image, field-package, install-template]
+    needs: [check, push-image, field-package, install-template]
     runs-on: ubuntu-latest
     permissions:
       contents: write

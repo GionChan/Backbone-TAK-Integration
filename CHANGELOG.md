@@ -1,15 +1,45 @@
 # Changelog
 
-## 1.1.1 — 2026-11-04
+## 1.1.2 — 2026-11-04
+
+### Relay
+
+- PLI ingest without `TAK_INGEST_UIDS` publishes only events from this machine (loopback).
+  Devices on other machines need their uid in `TAK_INGEST_UIDS`; in Docker this includes TAK
+  apps on the host. New drop reason `not-loopback`.
+- CoT with `<!DOCTYPE` or `<!ENTITY` anywhere is rejected (before, only the first 4 KiB were
+  checked).
+- Generated CoT escapes `type` and `how`. A CoT type given by a source must consist of letters,
+  digits, `_` and `-`; `gateway_cot_type_total` counts only such types.
+- `TAK_MAX_CLIENTS` (default 64) caps TCP clients on `TAK_PORT`; further connections are refused
+  (`gateway_output_rejected_total`).
+- `GATEWAY_HTTP_BIND` (default `127.0.0.1`): the HTTP port listens on this machine only. The
+  Docker image sets `0.0.0.0`, and compose publishes 8088 on the host's `127.0.0.1` only.
 
 ### Demo
 
-- Scenarios renamed: `swarm_orbit.py` (compose service `swarm-orbit`), `strike_package.py`,
-  `mass_raid.csv`. The live map's scripted scenario names its targets A–E.
+- Edge-AI CoT escapes every attribute value.
+
+### Deployment
+
+- Release workflow pushes the image only after the image, field-package and Windows install
+  checks have passed.
+- mediamtx in the Docker image is checked against a pinned SHA256.
+- `tests/test_stream_view.py` skips the image tests when Pillow is not installed.
+- Generic TAK client names in code comments, the `device.env` template and the demo launcher.
+
+## 1.1.1 — 2026-11-04
+
+### Deployment
+
+- Release workflow: the publish job downloads only the field package and the release notes, and
+  the image build uploads no build record. Downloading that record failed when 1.1.0 was
+  published.
 
 ### Documentation
 
-- References to events, dates and places removed.
+- Recognised backbone formats are listed in one table in docs/*/relay.md ("Recognised formats").
+  Other docs name TAK clients generically.
 
 ## 1.1.0 — 2026-11-04
 

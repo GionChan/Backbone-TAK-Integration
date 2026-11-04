@@ -51,7 +51,7 @@ useampia, aseta `GOAT_CERT_DIR`.
 | `GATEWAY_INGEST_ALL` | `0` natiivisti, `1` composessa | `1`: tilaa `**` ja muunna kaikki tunnistetut muodot. `0`: vain `GATEWAY_COT_KE` |
 | `GATEWAY_COT_KE` | `*/tak/cot/v1/**` | Minkä tahansa valmistajan valmis CoT (kun `GATEWAY_INGEST_ALL=0`) |
 | `GATEWAY_SOURCES` | kaikki | Osajoukko: `xml,geotrack,consilium,mavlink,hymots,orion,adsb,alerts,roi,proto` ([muodot](#tunnistetut-muodot)) |
-| `GATEWAY_HYMOTS_INTERVAL_S` | `10` | HYMOTS-jäljen lyhin päivitysväli |
+| `GATEWAY_HYMOTS_INTERVAL_S` | `10` | `hymots`-lähteen jäljen lyhin päivitysväli |
 | `XV_MAX_HZ_PER_UID` | `2` | Tahtiraja uidia kohden `GATEWAY_COT_KE`-liikenteelle |
 | `COT_TYPE` | `a-h-A-M-F-Q` | CoT-varatyyppi |
 
@@ -85,9 +85,10 @@ voi hienosäätää.
 | `TAK_MODE` | `direct` | `direct`, `multicast` tai `server` |
 | `TAK_LOCAL_OUTPUTS` | `0` | `server`-tila: `1` pitää myös UDP- ja TCP-lähdöt päällä |
 | `TAK_MULTICAST_GROUP`, `TAK_MULTICAST_IF`, `TAK_MULTICAST_TTL` | `239.2.3.1:6969`, käyttöjärjestelmän valinta, `1` | `multicast`-tila, ks. [tilat](modes.md#multicast) |
-| `TAK_UDP_TARGETS` | `TAK_HOST:TAK_UDP_PORT` | `osoite:portti[,osoite:portti…]`, CoT UDP:llä. TAK app 6969, WinTAK 4242 |
+| `TAK_UDP_TARGETS` | `TAK_HOST:TAK_UDP_PORT` | `osoite:portti[,osoite:portti…]`, CoT UDP:llä. Oletusportti 6969; WinTAK kuuntelee porttia 4242 |
 | `TAK_HOST`, `TAK_UDP_PORT` | `127.0.0.1`, `6969` | Yksi UDP-kohde (vanhempi muoto) |
 | `TAK_PORT` | `8087` | TCP-palvelin ATAK- ja WinTAK-striimausasiakkaille |
+| `TAK_MAX_CLIENTS` | `64` | TCP-asiakkaiden enimmäismäärä; sen ylittävät yhteydet hylätään |
 | `TAK_SERVER` | – | TAK Serverin `osoite[:portti]`, jolle virta lähetetään (ks. alla) |
 | `GATEWAY_CONFIG` | – | JSON-tiedosto, joka korvaa kaikki yllä olevat |
 
@@ -134,8 +135,8 @@ jokainen merkki tulee kahdesti. Valitse jokaiselle laitteelle yksi reitti.
 | `TAK_INGEST` | `0` | `1`: julkaise omat (friendly) CoT-tapahtumat polkuun `<slot>/tak/pli/v1/<uid>` |
 | `TAK_INGEST_TYPES` | `a-f-` | Hyväksytyt tyyppietuliitteet pilkulla erotettuina |
 | `TAK_INGEST_FROM` | `local` (`multicast`-tilassa `local,lan`) | Mistä yhteyksistä saa julkaista: `local` (UDP-sisääntulo, porttiin `:8087` yhdistäneet asiakkaat), `lan` (multicast-ryhmä, vain `TAK_INGEST_UIDS`-listan kanssa), `server` (TAK Server -yhteys). Pilkulla erotettuina |
-| `TAK_INGEST_UIDS` | tyhjä | Julkaistavien laitteiden uidit pilkulla erotettuina (esim. `ANDROID-abc123`). Tyhjä = mikä tahansa paikallinen laite |
-| `TAK_UDP_IN_PORT` | `0` (compose: `6971`) | UDP-portti TAK-asiakkaiden CoT:lle (esim. TAK-sovelluksen ulostulo) |
+| `TAK_INGEST_UIDS` | tyhjä | Julkaistavien laitteiden uidit pilkulla erotettuina (esim. `ANDROID-abc123`). Tyhjä = vain tämän koneen TAK-sovellukset (loopback) |
+| `TAK_UDP_IN_PORT` | `0` (compose: `6971`) | UDP-portti TAK-asiakkaiden CoT:lle (niiden UDP-ulostulo) |
 
 Myös porttiin `:8087` yhdistäneiden TCP-asiakkaiden lähettämät tapahtumat luetaan. Enintään
 yksi päivitys sekunnissa uidia kohden; tehtävätyyppejä (`t-*`) ja muita kuin omia tyyppejä ei
@@ -146,13 +147,22 @@ Backboneen julkaistaan vain omien laitteiden sijainnit:
 - **TAK Serverin käyttäjät pysyvät TAK Serverillä.** `tcp_client`-yhteydessä kulkevat kaikkien
   serverin käyttäjien tiedot. Ne näytetään TAKissa, mutta niitä ei julkaista backboneen, ellei
   asetuksena ole `TAK_INGEST_FROM=local,server`.
+- **Vain tämä kone, ellei laitetta ole listattu.** Ilman `TAK_INGEST_UIDS`-listaa julkaistaan
+  vain tältä koneelta (127.0.0.1) tulevat tapahtumat. Muuten kuka tahansa verkossa voisi
+  julkaista sijainteja backboneen sinun slotissasi. Jos haluat julkaista toisen koneen laitteen,
+  lisää sen uid listaan.
 - **Sallittujen lista.** Kun `TAK_INGEST_UIDS` on asetettu, julkaistaan vain listatut uidit,
-  vaikka terminaali välittäisi muidenkin sijainteja.
+  vaikka terminaali välittäisi muidenkin sijainteja. Laite ilmoittaa uidinsa itse, joten lista
+  estää vahingot mutta ei tahallista väärentäjää: pidä portit 6971 ja 8087 poissa
+  epäluotettavista verkoista.
 - **Ei kaikua.** Uidia, jonka relay on itse lähettänyt TAKiin viimeisen 60 sekunnin aikana, ei
   julkaista takaisin.
 
+Dockerissa isännän paketit eivät tule osoitteesta 127.0.0.1, joten siellä `TAK_INGEST=1` vaatii
+`TAK_INGEST_UIDS`-listan.
+
 Hylätyt tapahtumat lasketaan mittariin
-`gateway_ingest_dropped_total{reason="not-local"|"not-allowed"|"echo"|"relayed"}` (`relayed`:
+`gateway_ingest_dropped_total{reason="not-local"|"not-loopback"|"not-allowed"|"echo"|"relayed"}` (`relayed`:
 tapahtumassa on toisen relayn merkintä, ks. [tilat](modes.md#kaikissa-tiloissa)), ja `/status` näyttää
 asetukset `ingest_from` ja `ingest_uids`.
 
@@ -171,6 +181,13 @@ yhteys fabriciin on ollut poikki `GATEWAY_LOST_S` sekuntia (300) tai dataa ei ol
 `GATEWAY_WATCHDOG_S` sekuntiin (300).
 
 ## HTTP-rajapinnat (`GATEWAY_HTTP_PORT`, oletus 8088)
+
+HTTP-portti kuuntelee osoitetta `GATEWAY_HTTP_BIND`, oletuksena `127.0.0.1` (vain tämä kone),
+koska siinä ei ole tunnistautumista ja `/api/sample` palauttaa backbonen dataa. Docker-image
+asettaa kontin sisällä arvon `0.0.0.0`, ja `docker-compose.yml` julkaisee portin vain isännän
+osoitteeseen `127.0.0.1`. Jos porttiin pitää päästä toiselta koneelta, aseta
+`GATEWAY_HTTP_BIND=0.0.0.0` (natiivisti) tai muuta composen porttimääritystä, ja rajaa pääsy
+palomuurilla.
 
 | Polku | Sisältö |
 | --- | --- |
@@ -196,9 +213,13 @@ mediamtx ovat Docker-imagessa valmiina.
 - **Sertifikaatit** (`certs/`, `*.pem`, `*.key`, `*.cbor`) ja **kenttäpaketit** (`dist/`) on
   rajattu versionhallinnan ulkopuolelle, koska ne sisältävät yksityisen avaimen. Älä koskaan
   commitoi tai jaa niitä.
-- **Porteissa 8087, 8088, 6971 ja 8554 ei ole tunnistautumista.** `/api/sample` palauttaa
-  puskuroitua backbone-dataa. Avaa portit vain paikalliselle koneelle tai luotettuun verkkoon ja
-  estä ne palomuurilla muualta.
+- **Porteissa 8087, 8088, 6971 ja 8554 ei ole tunnistautumista.** Näin TAKin tavalliset
+  CoT-tulot toimivat: verkon TAK-laitteiden pitää tavoittaa portit 8087, 6971 ja 8554, joten ne
+  kuuntelevat kaikkia liitäntöjä. Portti 8088 (`/api/sample` palauttaa puskuroitua
+  backbone-dataa) kuuntelee oletuksena vain tätä konetta. Pidä relay luotetussa verkossa ja estä
+  portit palomuurilla muualta.
+- **TCP-asiakkaiden määrä on rajattu** muuttujalla `TAK_MAX_CLIENTS` (64); sen ylittävät
+  yhteydet hylätään (`gateway_output_rejected_total`).
 - **Vähimmät oikeudet fabricissa.** Relay lukee laajasti (`**`, kun `GATEWAY_INGEST_ALL=1`), mutta
   kirjoittaa vain heartbeateja ja `TAK_INGEST=1`-asetuksella PLI:tä omaan slotiinsa.
 - **Epäluotettava syöte.** Muiden valmistajien CoT tarkistetaan ennen välittämistä (ei DTD:tä,

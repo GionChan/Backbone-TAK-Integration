@@ -2,7 +2,7 @@
 #
 # Brings up, on this Windows NetBird peer:
 #   - certs in .\certs\ (copied from -BundleDir on first run)
-#   - the TAK relay (product) -> CoT to TAK app (UDP 6969) and WinTAK (UDP 4242), TCP :8087
+#   - the TAK relay (product) -> CoT by UDP to 6969 and to WinTAK (UDP 4242), TCP :8087
 #   - demo profile: local router, live map :8080, swarm-orbit scenario
 #   - native strike-package scenario, published through the real fabric from this peer
 # Every demo track is exercise-labelled (demo/sender.py) and reaches TAK through the relay.
@@ -82,5 +82,5 @@ if ($EdgeApi) {
 }
 
 Write-Host ""
-Write-Host "WinTAK: CoT arrives on its Default UDP input (4242). TAK app: UDP 6969. ATAK: TCP <this-ip>:8087." -ForegroundColor Yellow
+Write-Host "WinTAK: CoT arrives on its Default UDP input (4242). Other TAK apps: UDP 6969. ATAK: TCP <this-ip>:8087." -ForegroundColor Yellow
 Write-Host "Monitor: python demo\tools\live_monitor.py      Stop: .\demo\run-backbone-demo.ps1 -Stop" -ForegroundColor Yellow

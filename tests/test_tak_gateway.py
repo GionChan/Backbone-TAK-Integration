@@ -101,6 +101,18 @@ class IngestTests(unittest.TestCase):
         gw.ingest_event(self._pli("ANDROID-own1"), "udp_in@127.0.0.1")
         self.assertEqual(self._published(), [f"{gw.gc.ORG}/tak/pli/v1/ANDROID-own1"])
 
+    def test_without_allowlist_only_this_machine_publishes(self):
+        gw.ingest_event(self._pli("SPOOF-1"), "udp_in@192.168.1.50")
+        gw.ingest_event(self._pli("SPOOF-2"), "tcp_server:8087@10.0.0.9:50000")
+        gw.ingest_event(self._pli("ANDROID-own1"), "tcp_server:8087@127.0.0.1:50001")
+        self.assertEqual(self._published(), [f"{gw.gc.ORG}/tak/pli/v1/ANDROID-own1"])
+        self.assertEqual(gw.COUNTERS['gateway_ingest_dropped_total{reason="not-loopback"}'], 2)
+
+    def test_allowlist_admits_named_devices_from_the_network(self):
+        with mock.patch.object(gw, "INGEST_UIDS", frozenset({"ANDROID-own1"})):
+            gw.ingest_event(self._pli("ANDROID-own1"), "udp_in@192.168.1.50")
+        self.assertEqual(self._published(), [f"{gw.gc.ORG}/tak/pli/v1/ANDROID-own1"])
+
     def test_tak_server_users_are_not_published(self):
         gw.ingest_event(self._pli("ANDROID-other"), "tcp_client:tak:8089", "server")
         self.assertEqual(self._published(), [])
@@ -279,6 +291,20 @@ class TcpServerOutputTests(unittest.TestCase):
             got += len(reader.recv(65536))
         stalled.close()
         reader.close()
+
+    def test_client_cap(self):
+        port = _free_port()
+        with mock.patch.object(gw, "MAX_TCP_CLIENTS", 2):
+            out = gw.TcpServerOutput({"port": port})
+            socks = [socket.create_connection(("127.0.0.1", port)) for _ in range(3)]
+            deadline = time.time() + 5
+            while gw.COUNTERS[f'gateway_output_rejected_total{{output="{out.name}"}}'] < 1 \
+                    and time.time() < deadline:
+                time.sleep(0.05)
+        self.assertEqual(out.status()["clients"], 2)
+        self.assertEqual(gw.COUNTERS[f'gateway_output_rejected_total{{output="{out.name}"}}'], 1)
+        for s in socks:
+            s.close()
 
 
 if __name__ == "__main__":

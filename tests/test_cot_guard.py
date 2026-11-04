@@ -39,6 +39,11 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(g.validate_cot(b'<!DOCTYPE x [<!ENTITY a "b">]>' + event())[1], "dtd-not-allowed")
         self.assertEqual(g.validate_cot(event(extra="<x>" + "a" * 70000 + "</x>"))[1], "too-large")
 
+    def test_rejects_dtd_after_padding(self):
+        # A long comment first must not push the DTD past the check.
+        padded = b"<!--" + b"x" * 5000 + b'--><!DOCTYPE event [<!ENTITY e "x">]>' + event()
+        self.assertEqual(g.validate_cot(padded)[1], "dtd-not-allowed")
+
     def test_rate_limiter(self):
         r = g.RateLimiter(2)
         t = time.time()

@@ -76,7 +76,13 @@ CI: .github/workflows/tests.yml, windows-latest + ubuntu-latest, Python 3.12.
 10. PLI ingest publishes only local devices: `_reader(..., kind="server")` for TAK Server links,
     filtered by `INGEST_FROM` (default local), `INGEST_UIDS` and the echo guard (`_forwarded`).
     A TAK Server carries other users' positions; never publish them by default. Kind "lan"
-    (multicast) is published only for uids in INGEST_UIDS. Events with RELAY_TAG are never published.
+    (multicast) is published only for uids in INGEST_UIDS. Kind "local" without INGEST_UIDS is
+    published only from loopback (`_from_loopback`). Events with RELAY_TAG are never published.
+13. Unauthenticated listeners: GATEWAY_HTTP_BIND defaults to 127.0.0.1 (the image sets 0.0.0.0,
+    compose publishes on 127.0.0.1). TAK ports stay on all interfaces (TAK devices must reach
+    them); the TCP server refuses clients beyond TAK_MAX_CLIENTS.
+14. The release image is pushed only in `push-image`, after `image` and `install-template` pass.
+    mediamtx is checked against the pinned SHA256 in the Dockerfile; update both together.
 11. dispatch() tags every outgoing CoT with RELAY_TAG (loop protection between relays).
 12. Field-package messages live in tools/field_package/lang.ps1 with the same keys in fi and en
     (test_same_keys_in_fi_and_en, test_used_keys_exist). Never hard-code user text in the .ps1.
@@ -86,8 +92,9 @@ CI: .github/workflows/tests.yml, windows-latest + ubuntu-latest, Python 3.12.
 Env vars are documented in docs/en/relay.md (single source; update it when adding one).
 Identity: GOAT_CERT/KEY/CA, GOAT_CERT_DIR (exclusive when set), GOAT_ORG, GOAT_ROUTER (tls/; else NOTES.md),
 GOAT_LOCAL_ROUTER (tcp/). Mode: TAK_MODE (direct|multicast|server, docs/en/modes.md), TAK_LOCAL_OUTPUTS, TAK_MULTICAST_*.
-Outputs: TAK_UDP_TARGETS, TAK_PORT, TAK_SERVER*, GATEWAY_CONFIG. Ingest:
-GATEWAY_INGEST_ALL, TAK_INGEST, TAK_INGEST_FROM, TAK_INGEST_UIDS, TAK_UDP_IN_PORT. Ops: GATEWAY_HTTP_PORT, GATEWAY_SYSTEM,
+Outputs: TAK_UDP_TARGETS, TAK_PORT, TAK_MAX_CLIENTS, TAK_SERVER*, GATEWAY_CONFIG. Ingest:
+GATEWAY_INGEST_ALL, TAK_INGEST, TAK_INGEST_FROM, TAK_INGEST_UIDS, TAK_UDP_IN_PORT. Ops: GATEWAY_HTTP_PORT,
+GATEWAY_HTTP_BIND, GATEWAY_SYSTEM,
 GATEWAY_WATCHDOG_S, GATEWAY_LOST_S. Video: GATEWAY_VIDEO*.
 
 ## Key spaces
@@ -117,8 +124,11 @@ __version__, docker-compose image tag and the newest CHANGELOG section must agre
   them in sync. Finnish follows Kielitoimisto rules.
 - tools/register_portal_topics.py --apply and anything publishing to the real fabric affect a
   shared network: do not run them without the user's explicit consent.
-- Docs name no events, places or people. Vendor format names appear only in the
-  "Recognised formats" table of docs/*/relay.md.
+- Docs and user-visible text name no events, places, people or national TAK variants; use
+  WinTAK, ATAK or "TAK app". Vendor format names appear only in the "Recognised formats" table
+  of docs/*/relay.md and in variable names (GATEWAY_SOURCES, GATEWAY_HYMOTS_INTERVAL_S).
+- CHANGELOG lists what changed for users of the previous release; never what was removed from
+  history or why.
 
 ## Unverified (do not claim otherwise)
 

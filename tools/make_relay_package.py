@@ -182,7 +182,7 @@ GOAT_CERT_DIR=.\\certs
 {system_line}
 GATEWAY_HTTP_PORT=8088
 
-# Mode direct: CoT by UDP to the TAK app (TAK app 6969, WinTAK 4242). Another machine: its IP.
+# Mode direct: CoT by UDP to the TAK app (default 6969, WinTAK 4242). Another machine: its IP.
 TAK_HOST={tak_host}
 TAK_UDP_PORT={tak_udp_port}
 # TCP stream for ATAK/WinTAK (all modes).
@@ -195,7 +195,8 @@ TAK_PORT={tak_port}
 TAK_INGEST={tak_ingest}
 # UDP port for the TAK app's own position (its UDP output).
 TAK_UDP_IN_PORT={tak_udp_in_port}
-# Only these device uids may publish (comma-separated). Required in mode multicast.
+# Only these device uids may publish (comma-separated). Empty: only TAK apps on this machine.
+# Required in mode multicast.
 {uids_line}
 
 # Convert every recognised position format on the backbone (all vendors).

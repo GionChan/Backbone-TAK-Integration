@@ -61,7 +61,9 @@ with sender.open_session("oma-skenaario") as s:
 
 Käynnistin tarkistaa meshin, käynnistää relayn demoasetuksilla (CoT UDP:llä porttiin 6969
 ja WinTAKille porttiin 4242, PLI ja video päällä), demoprofiilin sekä iskuosastoskenaarion
-natiivisti. Lokit tallentuvat kansioon `logs/`.
+natiivisti. Lokit tallentuvat kansioon `logs/`. Relay toimii Dockerissa, joten isännän
+TAK-sovellusten PLI julkaistaan vain `TAK_INGEST_UIDS`-listan uideille (aseta muuttuja
+komentotulkissa ennen käynnistystä).
 
 ### Mikä tahansa käyttöjärjestelmä
 

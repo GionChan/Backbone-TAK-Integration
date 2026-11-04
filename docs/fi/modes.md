@@ -14,7 +14,7 @@ relayta kohden:
 | **Kenelle** | Tämä kone tai muutama nimetty laite | Suljettu oma lähiverkko | Organisaatio, jolla on TAK Server |
 | **Mitä TAKiin asetetaan** | Yksi tuloportti: UDP 6969, 4242 (WinTAK) tai TCP 8087 | Ei mitään | Ei mitään, laitteet ovat jo serverillä |
 | **Kuka näkee backbonen** | Vain asetetut laitteet | **Kaikki samassa verkkosegmentissä** | Kaikki serverin käyttäjät |
-| **Kenen sijainti julkaistaan** (`TAK_INGEST=1`) | Paikalliset laitteet (tai `TAK_INGEST_UIDS`) | Vain `TAK_INGEST_UIDS`-listan uidit | Ei kenenkään oletuksena |
+| **Kenen sijainti julkaistaan** (`TAK_INGEST=1`) | Tämän koneen TAK-sovellukset (tai `TAK_INGEST_UIDS`) | Vain `TAK_INGEST_UIDS`-listan uidit | Ei kenenkään oletuksena |
 | **Docker** | Kyllä | Vain Linuxin isäntäverkossa | Kyllä |
 | **Pakolliset asetukset** | – | – | `TAK_SERVER` ja sen .p12-tiedostot |
 

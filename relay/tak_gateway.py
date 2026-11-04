@@ -11,7 +11,8 @@ TAK -> backbone (optional, TAK_INGEST=1)
   * CoT events that local TAK clients send (UDP input, TCP server) are validated and published
     to <org>/tak/pli/v1/<uid> (friendly PLI by default). Off by default: it writes to the shared
     backbone. Events from a TAK Server link carry other users' positions and are never published
-    unless TAK_INGEST_FROM includes "server". TAK_INGEST_UIDS limits publishing to named devices.
+    unless TAK_INGEST_FROM includes "server". TAK_INGEST_UIDS limits publishing to named devices;
+    without it only TAK clients on this machine (loopback) may publish.
     Events whose uid the relay itself sent to TAK in the last 60 s are dropped (no echo loops).
 
 Operations
@@ -26,7 +27,8 @@ Config: env for the simple case, or GATEWAY_CONFIG=<json file>:
                "tls":{"cert":"c.pem","key":"k.pem","ca":"ca.pem","verify_hostname":false}}],
    "ingest":false}
 Simple env: TAK_UDP_TARGETS (host:port[,host:port...]; else TAK_HOST + TAK_UDP_PORT), TAK_PORT, TAK_INGEST,
-TAK_INGEST_FROM (local[,server]), TAK_INGEST_UIDS, TAK_SERVER* (see tak_links.py), GATEWAY_HTTP_PORT, XV_MAX_HZ_PER_UID,
+TAK_INGEST_FROM (local[,server]), TAK_INGEST_UIDS, TAK_SERVER* (see tak_links.py), TAK_MAX_CLIENTS (TCP server, default 64),
+GATEWAY_HTTP_PORT, GATEWAY_HTTP_BIND (default 127.0.0.1), XV_MAX_HZ_PER_UID,
 GATEWAY_WATCHDOG_S (silence, default 300), GATEWAY_LOST_S (fabric link down, default 300: Zenoh reconnects by itself, a restart costs ~1 min),
 GATEWAY_INGEST_ALL=1 (convert every recognisable positional message on the backbone, see backbone_cot.py),
 GATEWAY_SOURCES (subset of xml,geotrack,consilium,mavlink,hymots,orion,adsb,alerts,roi,proto), GATEWAY_HYMOTS_INTERVAL_S.
@@ -40,6 +42,7 @@ camera, default 8554), GATEWAY_VIDEO_IDLE_S (stop a camera's relay after this lo
 data, default 120), GATEWAY_VIDEO_REPUBLISH_S (CoT <video> marker refresh interval, default 30).
 """
 import collections
+import ipaddress
 import json
 import os
 import re
@@ -65,7 +68,7 @@ import symbology  # noqa: E402
 import tak_links  # noqa: E402
 import video_relay  # noqa: E402
 
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 START = time.time()
 GATEWAY_SYSTEM = os.environ.get("GATEWAY_SYSTEM", "tak-gateway")
 UDP_IN_PORT = int(os.environ.get("TAK_UDP_IN_PORT", "0"))
@@ -90,7 +93,17 @@ except tak_links.ConfigError as _exc:  # reported by main(); keeps the module im
     MODE, _MODE_ERROR = "direct", _exc
 # Link kinds: "local" (UDP input, TCP server clients), "lan" (multicast group), "server" (TAK Server).
 INGEST_FROM = _csv_set("TAK_INGEST_FROM", tak_links.default_ingest_from(MODE))
-INGEST_UIDS = _csv_set("TAK_INGEST_UIDS")            # empty = any local device ("lan" needs the list)
+INGEST_UIDS = _csv_set("TAK_INGEST_UIDS")            # empty = devices on this machine only ("lan" needs the list)
+MAX_TCP_CLIENTS = int(os.environ.get("TAK_MAX_CLIENTS", "64"))
+
+
+def _from_loopback(origin: str) -> bool:
+    """True when origin ("udp_in@1.2.3.4", "tcp_server:8087@1.2.3.4:5678") is this machine."""
+    m = re.search(r"@([0-9.]+)", origin)
+    try:
+        return bool(m) and ipaddress.ip_address(m.group(1)).is_loopback
+    except ValueError:
+        return False
 # Added to every CoT the relay sends, so no relay re-publishes what a relay put on TAK.
 RELAY_TAG = b"<__efdi_relay/>"
 _ECHO_S = 60.0
@@ -224,6 +237,11 @@ def ingest_event(ev: bytes, origin: str, kind: str = "local") -> None:
         return
     if RELAY_TAG in ev:
         inc('gateway_ingest_dropped_total{reason="relayed"}')
+        return
+    # Without an allowlist only this machine's TAK app may publish: anyone else on the network
+    # could otherwise put positions on the fabric under the org's identity.
+    if kind == "local" and not INGEST_UIDS and not _from_loopback(origin):
+        inc('gateway_ingest_dropped_total{reason="not-loopback"}')
         return
     ok, reason = cot_guard.validate_cot(ev)
     if not ok:
@@ -374,6 +392,13 @@ class TcpServerOutput:
                 conn, addr = srv.accept()
             except OSError:
                 return
+            with self.lock:
+                full = len(self.clients) >= MAX_TCP_CLIENTS
+            if full:
+                conn.close()
+                inc(f'gateway_output_rejected_total{{output="{self.name}"}}')
+                log(f"{self.name}: refused {addr[0]}:{addr[1]}, {MAX_TCP_CLIENTS} clients already (TAK_MAX_CLIENTS)")
+                continue
             client = _TcpClient(conn, f"{self.name}@{addr[0]}:{addr[1]}", self._forget)
             with self.lock:
                 self.clients.append(client)
@@ -470,7 +495,7 @@ class TcpClientOutput:
 
 
 def start_udp_input(port: int) -> None:
-    """Receive CoT that a TAK client sends by UDP (e.g. a TAK client output) and feed the PLI ingest."""
+    """Receive CoT that a TAK client sends by UDP (its UDP output) and feed the PLI ingest."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(("", port))
 
@@ -678,7 +703,7 @@ def on_any(sample) -> None:
         if source == "xml" and _dup(uid, data):
             inc('gateway_cot_dropped_total{reason="duplicate"}')
             continue
-        m = re.search(rb'type="([^"]{1,40})"', data[:400])
+        m = re.search(rb'type="([A-Za-z0-9_.-]{1,40})"', data[:400])
         if m:
             inc(f'gateway_cot_type_total{{source="{source}",type="{m.group(1).decode("ascii", "replace")}"}}')
         dispatch(data)
@@ -802,9 +827,11 @@ def main() -> None:
     except (ValueError, RuntimeError, OSError) as exc:  # ConfigError, bad .p12 / PEM, ssl.SSLError
         raise SystemExit(f"configuration error: {exc}  (check with: python relay/doctor.py)") from None
     port = int(os.environ.get("GATEWAY_HTTP_PORT", "8088"))
-    threading.Thread(target=ThreadingHTTPServer(("", port), Ops).serve_forever, daemon=True).start()
+    # /api/sample serves backbone payloads without auth: this machine only, unless set otherwise.
+    http_bind = os.environ.get("GATEWAY_HTTP_BIND", "127.0.0.1")
+    threading.Thread(target=ThreadingHTTPServer((http_bind, port), Ops).serve_forever, daemon=True).start()
     log(f"v{__version__} mode={MODE} org={gc.ORG} outputs={[o.name for o in OUTPUTS]} ingest={INGEST[0]} "
-        f"ingest_from={','.join(sorted(INGEST_FROM))} ingest_uids={len(INGEST_UIDS) or 'any'} http=:{port}")
+        f"ingest_from={','.join(sorted(INGEST_FROM))} ingest_uids={len(INGEST_UIDS) or 'this machine'} http={http_bind}:{port}")
 
     if UDP_IN_PORT:
         start_udp_input(UDP_IN_PORT)
