@@ -4,6 +4,8 @@ These caught real bugs during manual smoke-testing (a Windows-path backslash emb
 python -c one-liner, a stale $LASTEXITCODE misreporting a successful install as failed) that
 a content/structure check alone would not have -- hence the PowerShell parse tests below.
 """
+import io
+import os
 import re
 import shutil
 import subprocess
@@ -12,6 +14,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 APP_DIR = REPO_ROOT / "relay"
@@ -160,6 +163,60 @@ class BuildPackageTests(unittest.TestCase):
                     self.assertTrue(raw.startswith(b"\xef\xbb\xbf"), name)
                     self.assertNotIn(b"\r\r", raw, name)
                     self.assertEqual(raw.count(b"\n"), raw.count(b"\r\n"), name)
+
+
+class BundledPythonTests(unittest.TestCase):
+    """Package layout with the bundled Python, built from fake downloads (no network)."""
+
+    def _fake_downloads(self, tmp):
+        embed = Path(tmp, "python-embed.zip")
+        with zipfile.ZipFile(embed, "w") as e:
+            e.writestr("python.exe", b"MZ")
+            e.writestr("python314.zip", b"stdlib")
+            e.writestr("python314._pth", "python314.zip\r\n.\r\n#import site\r\n")
+        wheel = Path(tmp, "demo_pkg-1.0-py3-none-any.whl")
+        with zipfile.ZipFile(wheel, "w") as w:
+            w.writestr("demo_pkg/__init__.py", "")
+            w.writestr("demo_pkg-1.0.dist-info/METADATA", "Name: demo_pkg")
+        return str(embed), [str(wheel)]
+
+    def test_layout_and_search_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            embed, wheels = self._fake_downloads(tmp)
+            with mock.patch.object(pkg, "fetch_embedded_python", return_value=embed), \
+                    mock.patch.object(pkg, "fetch_wheels", return_value=wheels):
+                out = _build(tmp, bundle_python=True)
+            with zipfile.ZipFile(out) as z:
+                names = set(z.namelist())
+                pth = z.read("python/python314._pth").decode()
+        self.assertTrue({"python/python.exe", "python/python314.zip", "python/SOURCE.txt",
+                         "python/Lib/site-packages/demo_pkg/__init__.py"} <= names)
+        self.assertEqual(pth.split("\r\n")[:5],
+                         ["python314.zip", ".", "Lib\\site-packages", "..\\app", "import site"])
+
+    def test_no_python_unless_asked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with zipfile.ZipFile(_build(tmp)) as z:
+                self.assertFalse(any(n.startswith("python/") for n in z.namelist()))
+
+    def test_wrong_download_is_refused(self):
+        class _Resp(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(pkg.urllib.request, "urlopen", return_value=_Resp(b"tampered")):
+            with self.assertRaisesRegex(SystemExit, "SHA256"):
+                pkg.fetch_embedded_python(tmp)
+            self.assertEqual(os.listdir(tmp), [])
+
+    def test_bootstrap_prefers_bundled_python(self):
+        bundled = pkg.BOOTSTRAP_PS1.index('python\\python.exe')
+        self.assertLess(bundled, pkg.BOOTSTRAP_PS1.index("Get-Command $Python"))
+        self.assertLess(bundled, pkg.BOOTSTRAP_PS1.index("pip install"))
 
 
 class InstallerPitfallTests(unittest.TestCase):

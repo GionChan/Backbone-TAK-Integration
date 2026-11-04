@@ -3,7 +3,8 @@
 **In English:** README.en.md
 
 Tämä paketti yhdistää laitteen EFDI-backboneen ja tuo backbonen tilannekuvan TAK-ohjelmiin.
-Asennin ottaa tarvittavat ohjelmat käyttöön ja asettaa relayn käynnistymään automaattisesti.
+Python ja muut tarvittavat ohjelmat ovat mukana, joten asennus ei tarvitse verkkoyhteyttä.
+Asennin asettaa relayn käynnistymään automaattisesti.
 
 ## Ennen asennusta
 

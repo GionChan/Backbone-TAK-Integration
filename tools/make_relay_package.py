@@ -22,9 +22,13 @@ All devices reuse the same vendor cert (Zenoh identity is per-org, not
 per-device); only GATEWAY_SYSTEM and the output ports vary.
 """
 import argparse
+import glob
+import hashlib
 import io
 import os
+import subprocess
 import sys
+import urllib.request
 import zipfile
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -68,6 +72,86 @@ PS1_FILES = ("lang.ps1", "bootstrap.ps1", "run.ps1", "install.ps1", "uninstall.p
 LANG_PS1, BOOTSTRAP_PS1, RUN_PS1, INSTALL_PS1, UNINSTALL_PS1 = (_template(n) for n in PS1_FILES)
 README_FI, README_EN = _template("README.fi.md"), _template("README.en.md")
 MODES = ("direct", "multicast", "server")
+
+# Bundled Python (Windows amd64): the device needs no Python and no network at install.
+# The embeddable zip is pinned to the SHA256 python.org publishes for it; the wheels come from
+# PyPI over HTTPS (pip checks the index hashes). Both are cached in dist/cache/.
+EMBED_PYTHON = {
+    "version": "3.14.10",
+    "url": "https://www.python.org/ftp/python/3.14.10/python-3.14.10-embed-amd64.zip",
+    "sha256": "90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159",
+}
+FIELD_REQUIREMENTS = ("eclipse-zenoh==1.9.0", "cryptography==46.0.3")
+CACHE_DIR = os.path.join(REPO_ROOT, "dist", "cache")
+
+
+def _sha256(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def fetch_embedded_python(cache: str = CACHE_DIR) -> str:
+    """Path to the pinned embeddable Python zip, downloaded once and checked against its SHA256."""
+    os.makedirs(cache, exist_ok=True)
+    path = os.path.join(cache, os.path.basename(EMBED_PYTHON["url"]))
+    if not os.path.isfile(path) or _sha256(path) != EMBED_PYTHON["sha256"]:
+        print(f"downloading {EMBED_PYTHON['url']}")
+        tmp = path + ".part"
+        with urllib.request.urlopen(EMBED_PYTHON["url"], timeout=120) as r, open(tmp, "wb") as f:
+            while chunk := r.read(1 << 20):
+                f.write(chunk)
+        got = _sha256(tmp)
+        if got != EMBED_PYTHON["sha256"]:
+            os.remove(tmp)
+            raise SystemExit(f"ERROR: {EMBED_PYTHON['url']} has SHA256 {got}, expected {EMBED_PYTHON['sha256']}")
+        os.replace(tmp, path)
+    return path
+
+
+def fetch_wheels(cache: str = CACHE_DIR) -> list:
+    """Windows amd64 wheels of FIELD_REQUIREMENTS (and their dependencies) for the bundled Python."""
+    minor = ".".join(EMBED_PYTHON["version"].split(".")[:2])
+    key = hashlib.sha256(" ".join(FIELD_REQUIREMENTS).encode()).hexdigest()[:12]
+    d = os.path.join(cache, f"wheels-win_amd64-py{minor}-{key}")
+    done = os.path.join(d, ".complete")
+    if not os.path.isfile(done):
+        os.makedirs(d, exist_ok=True)
+        subprocess.run([sys.executable, "-m", "pip", "download", "--quiet", "--only-binary=:all:",
+                        "--platform", "win_amd64", "--python-version", minor, "--implementation", "cp",
+                        "--dest", d, *FIELD_REQUIREMENTS], check=True)
+        open(done, "w").close()
+    wheels = sorted(glob.glob(os.path.join(d, "*.whl")))
+    if not wheels:
+        raise SystemExit(f"ERROR: no wheels in {d}")
+    return wheels
+
+
+def add_bundled_python(z: zipfile.ZipFile, embed_zip: str, wheels: list) -> None:
+    """python/ = embeddable Python + the wheels unpacked into python/Lib/site-packages."""
+    pth = None
+    with zipfile.ZipFile(embed_zip) as e:
+        for info in e.infolist():
+            if info.filename.endswith("._pth"):
+                pth = info.filename
+                continue
+            z.writestr(f"python/{info.filename}", e.read(info))
+    if pth is None:
+        raise SystemExit(f"ERROR: no ._pth file in {embed_zip}")
+    stdlib = pth[: -len("._pth")] + ".zip"
+    # sys.path of the bundled Python: stdlib, its folder, the wheels and the relay modules.
+    z.writestr(f"python/{pth}", f"{stdlib}\r\n.\r\nLib\\site-packages\r\n..\\app\r\nimport site\r\n")
+    for whl in wheels:
+        with zipfile.ZipFile(whl) as w:
+            for info in w.infolist():
+                if not info.is_dir():
+                    z.writestr(f"python/Lib/site-packages/{info.filename}", w.read(info))
+    z.writestr("python/SOURCE.txt",
+               f"Python {EMBED_PYTHON['version']} embeddable amd64 from {EMBED_PYTHON['url']}\r\n"
+               f"SHA256 {EMBED_PYTHON['sha256']}\r\n"
+               + "".join(f"{os.path.basename(w)} SHA256 {_sha256(w)}\r\n" for w in wheels))
 
 INSTALL_CMD = r"""@echo off
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps1" %*
@@ -125,7 +209,8 @@ def _write_ps1(z: zipfile.ZipFile, name: str, content: str) -> None:
 def build_package(system: str, cert_dir: str, out: str, tak_host: str, tak_udp_port: int,
                   tak_port: int, tak_ingest: bool, tak_udp_in_port: int, router: str = None,
                   lang: str = None, mode: str = None, tak_server: str = None, tak_p12: str = None,
-                  tak_trust_p12: str = None, ingest_uids: str = None) -> None:
+                  tak_trust_p12: str = None, ingest_uids: str = None, bundle_python: bool = False,
+                  cache: str = CACHE_DIR) -> None:
     cert, key, ca = identity.find_bundle(cert_dir)
     if not (cert and key and ca):
         raise SystemExit(f"ERROR: need exactly one <prefix>-cert.pem/-key.pem pair + a CA .pem in {cert_dir!r}")
@@ -157,6 +242,9 @@ def build_package(system: str, cert_dir: str, out: str, tak_host: str, tak_udp_p
         tak_port=tak_port, server_lines=server_lines, tak_ingest="1" if tak_ingest else "0",
         tak_udp_in_port=tak_udp_in_port, uids_line=line("TAK_INGEST_UIDS", ingest_uids))
 
+    if bundle_python:
+        embed_zip, wheels = fetch_embedded_python(cache), fetch_wheels(cache)
+
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
@@ -175,10 +263,12 @@ def build_package(system: str, cert_dir: str, out: str, tak_host: str, tak_udp_p
         z.writestr("device.env", device_env)
         for name, tmpl in (("README.fi.md", README_FI), ("README.en.md", README_EN)):
             z.writestr(name, tmpl.format(system=system, tak_udp_port=tak_udp_port, tak_port=tak_port))
+        if bundle_python:
+            add_bundled_python(z, embed_zip, wheels)
     with open(out, "wb") as f:
         f.write(buf.getvalue())
     print(f"wrote {out} ({os.path.getsize(out)} bytes): system={system!r} lang={lang or 'ask'} "
-          f"mode={mode or 'ask'} tak_host={tak_host} tak_udp_port={tak_udp_port} tak_port={tak_port}")
+          f"mode={mode or 'ask'} python={'bundled ' + EMBED_PYTHON['version'] if bundle_python else 'device'} tak_host={tak_host} tak_udp_port={tak_udp_port} tak_port={tak_port}")
     print("Cert bundled from:", cert, key, ca)
     print(f"Before shipping this to the device, register its heartbeat topic: "
           f"python tools/register_portal_topics.py --add-system {system} --apply")
@@ -203,13 +293,16 @@ def main() -> None:
     p.add_argument("--tak-p12", help="mode server: relay client certificate .p12 (copied to certs/tak/)")
     p.add_argument("--tak-trust-p12", help="mode server: TAK Server truststore .p12 (copied to certs/tak/)")
     p.add_argument("--router", default=None, help="Zenoh router endpoint (default: the bundle's NOTES.md, else the EFDI router)")
+    p.add_argument("--no-bundled-python", action="store_true",
+                   help="do not include Python; the device then needs Python 3.10+ and network at install")
     args = p.parse_args()
 
     out = args.out or os.path.join(REPO_ROOT, "dist", f"{args.system}-tak-relay.zip")
     build_package(args.system, args.cert_dir, out, args.tak_host, args.tak_udp_port,
                   args.tak_port, not args.no_ingest, args.tak_udp_in_port, args.router,
                   lang=args.lang, mode=args.mode, tak_server=args.tak_server, tak_p12=args.tak_p12,
-                  tak_trust_p12=args.tak_trust_p12, ingest_uids=args.ingest_uids)
+                  tak_trust_p12=args.tak_trust_p12, ingest_uids=args.ingest_uids,
+                  bundle_python=not args.no_bundled_python)
 
 
 if __name__ == "__main__":

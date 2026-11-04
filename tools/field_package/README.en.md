@@ -3,7 +3,8 @@
 **Suomeksi:** README.fi.md
 
 This package connects the device to the EFDI backbone and brings the backbone picture into TAK
-apps. The installer sets up what the relay needs and makes it start automatically.
+apps. Python and everything else the relay needs are included, so installing needs no network.
+The installer makes the relay start automatically.
 
 ## Before installing
 

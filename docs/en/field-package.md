@@ -24,13 +24,20 @@ python tools/make_relay_package.py --system field-relay-01                   # â
 | `--tak-port` | `8087` | TCP stream port |
 | `--tak-udp-in-port` | `6971` | UDP port for PLI from the terminal |
 | `--no-ingest` | off | Do not publish the terminal's own position |
-| `--router` | EFDI router | Zenoh mTLS router |
+| `--router` | bundle's `NOTES.md`, else EFDI router | Zenoh mTLS router |
+| `--no-bundled-python` | off | Leave Python out (smaller ZIP); the device then needs Python 3.10+ and network at install |
 
 The package contains `app/` (the relay modules, unchanged), `certs/`, `device.env` (all settings,
 including the slot read from the certificate), `bootstrap.ps1`, `run.ps1`, `install.cmd/.ps1`,
 `uninstall.cmd/.ps1`, `lang.ps1` (all messages in Finnish and English) and READMEs in both
 languages. The scripts live in `tools/field_package/`. Register the system name **before** shipping,
 or the heartbeat shows up as unknown.
+
+**Python is included** (Windows amd64, about 25 MB in all): the embeddable Python
+3.14.10 from python.org, pinned to its published SHA256, and the Windows wheels of
+`eclipse-zenoh` and `cryptography` from PyPI. The device needs no Python and no network at
+install. Downloads are cached in `dist/cache/`; `python/SOURCE.txt` in the ZIP lists every file
+and its SHA256.
 
 **The ZIP holds the private key.** Transfer it like a secret; `dist/` is git-ignored.
 
@@ -45,8 +52,8 @@ or the heartbeat shows up as unknown.
       the device uids whose position may be published.
 
    Anything preset with `make_relay_package.py` is not asked. The answers go to `device.env`.
-   Then it creates a venv, installs `eclipse-zenoh` (and `cryptography` in TAK Server mode),
-   registers automatic start, starts the relay and prints what to set in TAK.
+   Then it registers automatic start (with `--no-bundled-python` it first creates a venv and
+   installs `eclipse-zenoh`, plus `cryptography` in TAK Server mode), starts the relay and prints what to set in TAK.
    - Automatic start tries a scheduled task (at logon, no admin). If the account may not create
      scheduled tasks, it falls back to a shortcut in the Startup folder.
    - Kiosk machines with no logged-in user: `install.ps1 -AtSystemStartup` in an admin

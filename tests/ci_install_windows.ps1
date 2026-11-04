@@ -1,5 +1,6 @@
 # CI only (windows-latest, admin runner): installs the field package the way a user does and checks it.
-#   1. English + direct, answers typed into the prompts   2. Finnish + local network + device uid
+#   1. English + direct, bundled Python, with every Python hidden from PATH (proves no Python needed)
+#   2. Finnish + local network + device uid, package without bundled Python (venv + pip path)
 # Each run: build the package (fake bundle), unzip, install.ps1 under Windows PowerShell 5.1 with
 # answers on stdin, check device.env, the printed language, the running relay (/status), then
 # uninstall and check that the task and the processes are gone.
@@ -23,7 +24,8 @@ function Get-Status([int]$Port, [int]$WaitSeconds) {
     return $null
 }
 
-function Test-Install([string]$Name, [string]$System, [string[]]$Answers, [hashtable]$ExpectEnv, [string[]]$ExpectText) {
+function Test-Install([string]$Name, [string]$System, [string[]]$Answers, [hashtable]$ExpectEnv, [string[]]$ExpectText,
+                      [string[]]$BuildArgs = @(), [switch]$HidePython) {
     Write-Host "`n=== $Name"
     $work = Join-Path $root $System
     $certs = Join-Path $work "bundle"
@@ -32,9 +34,18 @@ function Test-Install([string]$Name, [string]$System, [string[]]$Answers, [hasht
     "fake-cert" | Set-Content (Join-Path $certs "$slot-cert.pem")
     "fake-key" | Set-Content (Join-Path $certs "$slot-key.pem")
     "fake-ca" | Set-Content (Join-Path $certs "efdi-ca-root.pem")
-    python (Join-Path $repo "tools\make_relay_package.py") --system $System --cert-dir $certs --out (Join-Path $work "pkg.zip") | Out-Null
+    python (Join-Path $repo "tools\make_relay_package.py") --system $System --cert-dir $certs --out (Join-Path $work "pkg.zip") @BuildArgs | Out-Null
     $pkg = Join-Path $work "pkg"
     Expand-Archive (Join-Path $work "pkg.zip") $pkg
+    $bundledPython = Join-Path $pkg "python\python.exe"
+    Check "$Name / bundled Python present = $(-not ($BuildArgs -contains '--no-bundled-python'))" `
+        ((Test-Path $bundledPython) -eq (-not ($BuildArgs -contains '--no-bundled-python')))
+
+    $savedPath = $env:PATH
+    if ($HidePython) {
+        $env:PATH = (($env:PATH -split ';') | Where-Object { $_ -and $_ -notmatch 'python|WindowsApps' }) -join ';'
+        Check "$Name / no python on PATH for the installer" ($null -eq (Get-Command python -ErrorAction SilentlyContinue))
+    }
 
     $answersFile = Join-Path $work "answers.txt"
     $Answers | Set-Content $answersFile -Encoding ASCII
@@ -43,6 +54,7 @@ function Test-Install([string]$Name, [string]$System, [string[]]$Answers, [hasht
     $p = Start-Process powershell.exe -WorkingDirectory $pkg -Wait -PassThru -NoNewWindow `
         -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $pkg "install.ps1") `
         -RedirectStandardInput $answersFile -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+    $env:PATH = $savedPath
     $out = (Get-Content $outFile -Raw) + (Get-Content $errFile -Raw)
     Write-Host $out
     Check "$Name / installer exit code 0" ($p.ExitCode -eq 0) "code $($p.ExitCode)"
@@ -62,6 +74,15 @@ function Test-Install([string]$Name, [string]$System, [string[]]$Answers, [hasht
         Check "$Name / /status mode" ($status.mode -eq $ExpectEnv["TAK_MODE"]) "got '$($status.mode)'"
         Check "$Name / /status system" ($status.system -eq $System) "got '$($status.system)'"
     }
+    $running = @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+            Where-Object { $_.CommandLine -like "*tak_gateway.py*" -and $_.CommandLine -like "*$pkg*" })
+    if (Test-Path $bundledPython) {
+        Check "$Name / relay runs on the bundled Python" (@($running | Where-Object { $_.ExecutablePath -eq $bundledPython }).Count -ge 1) `
+            "$($running.ExecutablePath -join ', ')"
+        Check "$Name / no venv created" (-not (Test-Path (Join-Path $pkg ".venv")))
+    } else {
+        Check "$Name / venv created" (Test-Path (Join-Path $pkg ".venv\Scripts\python.exe"))
+    }
     $task = "EFDI-TAK-Relay-$System"
     schtasks /Query /TN $task > $null 2>&1
     $hasTask = ($LASTEXITCODE -eq 0)
@@ -79,15 +100,17 @@ function Test-Install([string]$Name, [string]$System, [string[]]$Answers, [hasht
     Check "$Name / port 8088 free again" ($null -eq (Get-Status 8088 5))
 }
 
-# 1. English, direct. Answers: language 2 = English, mode 1 = direct.
+# 1. English, direct, bundled Python, no Python on PATH. Answers: 2 = English, 1 = direct.
 Test-Install "en-direct" "ci-relay-en" @("2", "1") `
     @{ RELAY_LANG = "en"; TAK_MODE = "direct" } `
-    @("Choose language", "Installation complete.", "Next, in the TAK app:", "Set the CoT input to UDP port 6969")
+    @("Choose language", "Installation complete.", "Next, in the TAK app:", "Set the CoT input to UDP port 6969") `
+    -HidePython
 
-# 2. Finnish, local network, one device uid. Answers: 1 = Suomi, 2 = multicast, the uid.
+# 2. Finnish, local network, one device uid, no bundled Python. Answers: 1 = Suomi, 2 = multicast, the uid.
 Test-Install "fi-multicast" "ci-relay-fi" @("1", "2", "ANDROID-ci") `
     @{ RELAY_LANG = "fi"; TAK_MODE = "multicast"; TAK_INGEST_UIDS = "ANDROID-ci" } `
-    @("Valitse kieli", "Asennus valmis.", "Seuraavaksi TAK-ohjelmaan:")
+    @("Valitse kieli", "Asennus valmis.", "Seuraavaksi TAK-ohjelmaan:") `
+    -BuildArgs @("--no-bundled-python")
 
 Write-Host ""
 if ($failures.Count -gt 0) { Write-Host "INSTALL TEST FAILED: $($failures -join '; ')"; exit 1 }

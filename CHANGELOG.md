@@ -38,7 +38,9 @@
   preset the answers. The TAK Server password is only asked at install.
 - Scripts moved to `tools/field_package/` and written with a UTF-8 BOM (Finnish letters in
   Windows PowerShell 5.1). READMEs in both languages.
-- `cryptography` is installed only in TAK Server mode.
+- Python is included by default: embeddable Python 3.14.10 (pinned SHA256) and the Windows
+  wheels, so the device needs no Python and no network at install (`--no-bundled-python` for
+  the old venv + pip way, where `cryptography` is installed only in TAK Server mode).
 
 ### Deployment
 

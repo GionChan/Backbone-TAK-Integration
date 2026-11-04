@@ -32,6 +32,7 @@ demo/
   run-backbone-demo.ps1 setup-certs.ps1
 tools/                  make_relay_package.py (field ZIP), register_portal_topics.py (WRITES PORTAL)
   field_package/        installer scripts + READMEs for the ZIP; lang.ps1 holds every message (fi, en)
+                        bundled Python: make_relay_package.EMBED_PYTHON (pinned SHA256) + FIELD_REQUIREMENTS
 tests/                  unittest; e2e_gateway.py needs a local router
 docker-compose.yml      default = relay only; profiles: demo, edge, edge-api
 Dockerfile              targets: relay, demo; layout /opt/tak/{relay,demo}; runs as UID 10001

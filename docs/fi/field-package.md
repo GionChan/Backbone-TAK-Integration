@@ -24,13 +24,20 @@ python tools/make_relay_package.py --system field-relay-01                   # �
 | `--tak-port` | `8087` | TCP-striimin portti |
 | `--tak-udp-in-port` | `6971` | UDP-portti päätteen PLI:lle |
 | `--no-ingest` | pois | Älä julkaise päätteen omaa sijaintia |
-| `--router` | EFDI-reititin | Zenohin mTLS-reititin |
+| `--router` | bundlen `NOTES.md`, muuten EFDI-reititin | Zenohin mTLS-reititin |
+| `--no-bundled-python` | pois | Jätä Python pois (pienempi ZIP). Laite tarvitsee silloin Python 3.10:n ja verkkoyhteyden asennukseen |
 
 Paketissa ovat `app/` (relayn moduulit muuttamattomina), `certs/`, `device.env` (kaikki
 asetukset, myös sertifikaatista luettu slot), `bootstrap.ps1`, `run.ps1`, `install.cmd/.ps1`,
 `uninstall.cmd/.ps1`, `lang.ps1` (kaikki viestit suomeksi ja englanniksi) sekä ohjeet
 molemmilla kielillä. Skriptit ovat kansiossa `tools/field_package/`. Rekisteröi järjestelmänimi **ennen**
 toimitusta, muuten heartbeat näkyy tuntemattomana.
+
+**Python on mukana** (Windows amd64, yhteensä noin 25 Mt): python.orgin embeddable-Python
+3.14.10, joka on lukittu julkaistuun SHA256-tarkisteeseen, sekä `eclipse-zenoh`:n ja
+`cryptography`:n Windows-wheelit PyPI:stä. Laite ei tarvitse Pythonia eikä verkkoyhteyttä
+asennukseen. Lataukset tallentuvat välimuistiin `dist/cache/`, ja ZIPin `python/SOURCE.txt`
+luettelee jokaisen tiedoston ja sen SHA256-tarkisteen.
 
 **ZIP sisältää yksityisen avaimen.** Siirrä se kuin salaisuus; `dist/` on rajattu
 versionhallinnan ulkopuolelle.
@@ -46,9 +53,9 @@ versionhallinnan ulkopuolelle.
       niiden laitteiden uidit, joiden sijainnin saa julkaista.
 
    Mitä on valittu valmiiksi `make_relay_package.py`:llä, sitä ei kysytä. Vastaukset tallentuvat
-   tiedostoon `device.env`. Sen jälkeen asennin luo virtuaaliympäristön, asentaa
-   `eclipse-zenoh`:n (TAK Server -tilassa myös `cryptography`:n), rekisteröi automaattisen
-   käynnistyksen, käynnistää relayn ja kertoo, mitä TAKiin pitää asettaa.
+   tiedostoon `device.env`. Sen jälkeen asennin rekisteröi automaattisen käynnistyksen
+   (`--no-bundled-python`-paketissa se luo ensin virtuaaliympäristön ja asentaa `eclipse-zenoh`:n,
+   TAK Server -tilassa myös `cryptography`:n), käynnistää relayn ja kertoo, mitä TAKiin pitää asettaa.
    - Automaattinen käynnistys yrittää ensin ajastettua tehtävää (kirjautuessa, ei
      ylläpito-oikeuksia). Jos tili ei saa luoda ajastettuja tehtäviä, asennus käyttää
      Käynnistys-kansion pikakuvaketta.

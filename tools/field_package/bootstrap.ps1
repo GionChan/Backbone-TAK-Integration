@@ -2,6 +2,15 @@
 # is loaded into the environment. Sets $VenvPython.
 $BootstrapDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $BootstrapDir "lang.ps1")
+
+# Packages built with the bundled Python (the default) carry python\ with every dependency:
+# nothing to install, no network needed.
+$bundled = Join-Path $BootstrapDir "python\python.exe"
+if (Test-Path $bundled) {
+    $VenvPython = $bundled
+    return
+}
+
 if (-not $Python) { $Python = "python" }
 
 if (-not (Get-Command $Python -ErrorAction SilentlyContinue)) {
