@@ -67,6 +67,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build (amd64 + arm64), push only for a tag
         uses: docker/build-push-action@v6
+        env:
+          # No build-record artifact: publish does not need it, and its download failed in v1.1.0.
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: .
           target: relay
@@ -149,9 +152,17 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Only the two artifacts the release needs, by name.
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: field-package
+          path: artifacts/field-package
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: artifacts/release-notes
+      - name: Checksum still matches
+        run: cd artifacts/field-package && sha256sum -c SHA256SUMS
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
