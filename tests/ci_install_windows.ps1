@@ -42,7 +42,8 @@ function Test-Install([string]$Name, [string]$System, [string[]]$Answers, [hasht
     Compress-Archive -Path (Join-Path $work "bundle\*") -DestinationPath $bundleZip
     if (-not $Zip) {
         $Zip = Join-Path $work "pkg.zip"
-        $target = if ($Template) { @("--template") } else { @("--system", $System, "--cert-dir", $certs) }
+        # [string[]]: a one-element array would otherwise become a string, and @target would splat its letters.
+        [string[]]$target = if ($Template) { @("--template") } else { @("--system", $System, "--cert-dir", $certs) }
         python (Join-Path $repo "tools\make_relay_package.py") @target --out $Zip @BuildArgs | Out-Null
     }
     $pkg = Join-Path $work "pkg"
