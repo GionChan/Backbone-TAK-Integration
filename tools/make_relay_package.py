@@ -174,11 +174,12 @@ DEVICE_ENV_TMPL = """\
 {mode_line}
 
 GOAT_CERT_DIR=.\\certs
-GOAT_ORG={org}
-GOAT_ROUTER={router}
+# Slot: from the certificate when not set. Router: from certs\\NOTES.md when not set.
+{org_line}
+{router_line}
 
 # Name in the portal and in the heartbeat. Must be registered in the portal beforehand.
-GATEWAY_SYSTEM={system}
+{system_line}
 GATEWAY_HTTP_PORT=8088
 
 # Mode direct: CoT by UDP to the TAK app (TAK app 6969, WinTAK 4242). Another machine: its IP.
@@ -202,21 +203,35 @@ GATEWAY_INGEST_ALL=1
 """
 
 
+def relay_version() -> str:
+    """__version__ of relay/tak_gateway.py, read without importing it (it needs zenoh)."""
+    with open(os.path.join(REPO_ROOT, "relay", "tak_gateway.py"), encoding="utf-8") as f:
+        for ln in f:
+            if ln.startswith("__version__"):
+                return ln.split("=", 1)[1].strip().strip('"\'')
+    raise SystemExit("ERROR: no __version__ in relay/tak_gateway.py")
+
+
 def _write_ps1(z: zipfile.ZipFile, name: str, content: str) -> None:
     z.writestr(name, "\ufeff" + content.replace("\r\n", "\n").replace("\n", "\r\n"))
 
 
-def build_package(system: str, cert_dir: str, out: str, tak_host: str, tak_udp_port: int,
+def build_package(system, cert_dir, out: str, tak_host: str, tak_udp_port: int,
                   tak_port: int, tak_ingest: bool, tak_udp_in_port: int, router: str = None,
                   lang: str = None, mode: str = None, tak_server: str = None, tak_p12: str = None,
                   tak_trust_p12: str = None, ingest_uids: str = None, bundle_python: bool = False,
-                  cache: str = CACHE_DIR) -> None:
-    cert, key, ca = identity.find_bundle(cert_dir)
-    if not (cert and key and ca):
-        raise SystemExit(f"ERROR: need exactly one <prefix>-cert.pem/-key.pem pair + a CA .pem in {cert_dir!r}")
-    org = identity.org_for(cert)
-    if not org:
-        raise SystemExit(f"ERROR: cannot read the org slot from {cert}; set GOAT_ORG=<slot id>")
+                  cache: str = CACHE_DIR, template: bool = False) -> None:
+    """template=True: no certificate bundle and no device name; install.cmd asks for both."""
+    cert = key = ca = org = None
+    if not template:
+        cert, key, ca = identity.find_bundle(cert_dir)
+        if not (cert and key and ca):
+            raise SystemExit(f"ERROR: need exactly one <prefix>-cert.pem/-key.pem pair + a CA .pem in {cert_dir!r}")
+        org = identity.org_for(cert)
+        if not org:
+            raise SystemExit(f"ERROR: cannot read the org slot from {cert}; set GOAT_ORG=<slot id>")
+        if not system:
+            raise SystemExit("ERROR: --system is required (or build a --template)")
     if lang not in (None, "fi", "en"):
         raise SystemExit(f"ERROR: --lang must be fi or en, not {lang!r}")
     if mode not in (None, *MODES):
@@ -224,7 +239,8 @@ def build_package(system: str, cert_dir: str, out: str, tak_host: str, tak_udp_p
     for f in (tak_p12, tak_trust_p12):
         if f and not os.path.isfile(f):
             raise SystemExit(f"ERROR: {f} not found")
-    router = router or identity.router_for(cert)
+    if not template:
+        router = router or identity.router_for(cert)
 
     def line(key: str, value) -> str:
         return f"{key}={value}" if value else f"# {key}="
@@ -238,7 +254,8 @@ def build_package(system: str, cert_dir: str, out: str, tak_host: str, tak_udp_p
     ])
     device_env = DEVICE_ENV_TMPL.format(
         lang_line=line("RELAY_LANG", lang), mode_line=line("TAK_MODE", mode),
-        system=system, org=org, router=router, tak_host=tak_host, tak_udp_port=tak_udp_port,
+        org_line=line("GOAT_ORG", org), router_line=line("GOAT_ROUTER", router),
+        system_line=line("GATEWAY_SYSTEM", system), tak_host=tak_host, tak_udp_port=tak_udp_port,
         tak_port=tak_port, server_lines=server_lines, tak_ingest="1" if tak_ingest else "0",
         tak_udp_in_port=tak_udp_in_port, uids_line=line("TAK_INGEST_UIDS", ingest_uids))
 
@@ -250,9 +267,16 @@ def build_package(system: str, cert_dir: str, out: str, tak_host: str, tak_udp_p
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for name in APP_FILES:
             z.write(os.path.join(REPO_ROOT, "relay", name), f"app/{name}")
-        z.write(cert, f"certs/{os.path.basename(cert)}")
-        z.write(key, f"certs/{os.path.basename(key)}")
-        z.write(ca, "certs/efdi-ca-root.pem")
+        if template:
+            z.writestr("certs/README.txt", "Put your EFDI bundle here, or let install.cmd copy it.\r\n"
+                                           "Laita EFDI-varmennepaketti tähän, tai anna install.cmd:n kopioida se.\r\n")
+        else:
+            z.write(cert, f"certs/{os.path.basename(cert)}")
+            z.write(key, f"certs/{os.path.basename(key)}")
+            z.write(ca, "certs/efdi-ca-root.pem")
+            notes = os.path.join(os.path.dirname(cert), "NOTES.md")
+            if os.path.isfile(notes):
+                z.write(notes, "certs/NOTES.md")
         for f in (tak_p12, tak_trust_p12):
             if f:
                 z.write(f, f"certs/tak/{os.path.basename(f)}")
@@ -262,13 +286,16 @@ def build_package(system: str, cert_dir: str, out: str, tak_host: str, tak_udp_p
         z.writestr("uninstall.cmd", UNINSTALL_CMD)
         z.writestr("device.env", device_env)
         for name, tmpl in (("README.fi.md", README_FI), ("README.en.md", README_EN)):
-            z.writestr(name, tmpl.format(system=system, tak_udp_port=tak_udp_port, tak_port=tak_port))
+            z.writestr(name, tmpl.format(system=system or "tak-relay", tak_udp_port=tak_udp_port, tak_port=tak_port))
         if bundle_python:
             add_bundled_python(z, embed_zip, wheels)
     with open(out, "wb") as f:
         f.write(buf.getvalue())
     print(f"wrote {out} ({os.path.getsize(out)} bytes): system={system!r} lang={lang or 'ask'} "
           f"mode={mode or 'ask'} python={'bundled ' + EMBED_PYTHON['version'] if bundle_python else 'device'} tak_host={tak_host} tak_udp_port={tak_udp_port} tak_port={tak_port}")
+    if template:
+        print("Template: no certificate and no device name inside; install.cmd asks for both.")
+        return
     print("Cert bundled from:", cert, key, ca)
     print(f"Before shipping this to the device, register its heartbeat topic: "
           f"python tools/register_portal_topics.py --add-system {system} --apply")
@@ -276,8 +303,10 @@ def build_package(system: str, cert_dir: str, out: str, tak_host: str, tak_udp_p
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--system", required=True, help="unique device/system name (GATEWAY_SYSTEM, must be "
-                                                     "registered in the portal, and the zip's default filename)")
+    p.add_argument("--system", help="unique device/system name (GATEWAY_SYSTEM, must be registered in the "
+                                     "portal, and the zip's default filename). Required unless --template")
+    p.add_argument("--template", action="store_true",
+                   help="no certificate and no device name (safe to publish); install.cmd asks for both")
     p.add_argument("--cert-dir", default=os.path.join(REPO_ROOT, "certs"),
                    help="dir with <org>-cert.pem/-key.pem + CA root (default: ./certs)")
     p.add_argument("--out", default=None, help="output zip path (default: dist/<system>-tak-relay.zip)")
@@ -297,12 +326,15 @@ def main() -> None:
                    help="do not include Python; the device then needs Python 3.10+ and network at install")
     args = p.parse_args()
 
-    out = args.out or os.path.join(REPO_ROOT, "dist", f"{args.system}-tak-relay.zip")
+    if not args.template and not args.system:
+        p.error("--system is required unless --template")
+    name = f"efdi-tak-relay-{relay_version()}-windows-x64" if args.template else f"{args.system}-tak-relay"
+    out = args.out or os.path.join(REPO_ROOT, "dist", f"{name}.zip")
     build_package(args.system, args.cert_dir, out, args.tak_host, args.tak_udp_port,
                   args.tak_port, not args.no_ingest, args.tak_udp_in_port, args.router,
                   lang=args.lang, mode=args.mode, tak_server=args.tak_server, tak_p12=args.tak_p12,
                   tak_trust_p12=args.tak_trust_p12, ingest_uids=args.ingest_uids,
-                  bundle_python=not args.no_bundled_python)
+                  bundle_python=not args.no_bundled_python, template=args.template)
 
 
 if __name__ == "__main__":

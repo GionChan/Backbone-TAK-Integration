@@ -44,6 +44,14 @@
 
 ### Deployment
 
+- Release workflow: a tag `vX.Y.Z` publishes the image (amd64 + arm64, SBOM, provenance) to GHCR
+  and a GitHub Release with the field-package template and SHA256SUMS, after checking versions,
+  both architectures, that the template holds no secret, and installing that exact ZIP on
+  Windows. `feature/**` pushes are a dry run. See docs/en/release.md.
+- `make_relay_package.py --template`: no certificate and no device name; the installer asks for
+  the bundle (folder, .zip, .tar.gz, suggested from Downloads) and the name.
+- Installer prompts give up after 10 invalid answers instead of looping forever.
+
 - Docker image has a `HEALTHCHECK` on `/healthz` (also for plain `docker run`).
 - `cryptography` added to `relay/requirements.txt` (only needed for .p12).
 - Compose: `GOAT_ROUTER` empty by default (bundle notes win), TAK Server variables, image tag 1.1.0.

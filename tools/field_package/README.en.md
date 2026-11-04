@@ -16,6 +16,9 @@ The installer makes the relay start automatically.
 
 ## Installing
 
+If this is the template from a release, the installer first asks for your EFDI certificate
+bundle (folder, `.zip` or `.tar.gz`) and the device name.
+
 Unzip anywhere and double-click `install.cmd`. If Windows warns ("Windows protected your PC"),
 choose "More info" → "Run anyway".
 

@@ -87,6 +87,7 @@ certificates everything runs against the local router, offline. See the [demo gu
 | Relay: configuration, topics, operations, security | [relay](docs/en/relay.md) | [relay](docs/fi/relay.md) |
 | Demo: scenarios, sender, viewers | [demo](docs/en/demo.md) | [demo](docs/fi/demo.md) |
 | Field-device package (Windows, no Docker) | [field package](docs/en/field-package.md) | [kenttäpaketti](docs/fi/field-package.md) |
+| Releasing: image, field-package template | [release](docs/en/release.md) | [julkaisu](docs/fi/release.md) |
 | Troubleshooting | [troubleshooting](docs/en/troubleshooting.md) | [vianetsintä](docs/fi/troubleshooting.md) |
 | Interface spec | [`docs/asyncapi-tak-gateway.yaml`](docs/asyncapi-tak-gateway.yaml) | |
 | Changes | [CHANGELOG](CHANGELOG.md) | |

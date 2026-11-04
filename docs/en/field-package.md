@@ -14,7 +14,8 @@ python tools/make_relay_package.py --system field-relay-01                   # â
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--system` | required | Unique device name: `GATEWAY_SYSTEM`, heartbeat topic, file name |
+| `--system` | required (not with `--template`) | Unique device name: `GATEWAY_SYSTEM`, heartbeat topic, file name |
+| `--template` | off | No certificate and no device name (safe to share); `install.cmd` asks for both. This is what a [release](release.md) publishes |
 | `--lang` | asked at install | `fi` or `en`: language of the installer and its messages |
 | `--mode` | asked at install | `direct`, `multicast` or `server` ([modes](modes.md)) |
 | `--tak-server`, `--tak-p12`, `--tak-trust-p12` | â€” | `server` mode: address and .p12 files (copied to `certs/tak/`). The password is asked at install |

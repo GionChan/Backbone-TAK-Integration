@@ -165,6 +165,43 @@ class BuildPackageTests(unittest.TestCase):
                     self.assertEqual(raw.count(b"\n"), raw.count(b"\r\n"), name)
 
 
+class TemplateTests(unittest.TestCase):
+    """The publishable template: no certificate, no slot, no device name."""
+
+    def test_template_has_nothing_secret(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg.build_package(None, None, str(Path(tmp) / "t.zip"), "127.0.0.1", 6969, 8087, True, 6971,
+                              template=True)
+            with zipfile.ZipFile(Path(tmp) / "t.zip") as z:
+                names = z.namelist()
+                env = z.read("device.env").decode().splitlines()
+        self.assertEqual([n for n in names if n.startswith("certs/")], ["certs/README.txt"])
+        self.assertFalse([n for n in names if n.endswith((".pem", ".key", ".p12"))])
+        for key in ("GOAT_ORG", "GOAT_ROUTER", "GATEWAY_SYSTEM"):
+            self.assertIn(f"# {key}=", env)
+            self.assertFalse([ln for ln in env if ln.startswith(f"{key}=")])
+
+    def test_regular_package_needs_a_name(self):
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaises(SystemExit):
+            _build(tmp, system=None)
+
+    def test_notes_travel_with_the_certificate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _fake_cert_dir(tmp)
+            (d / "NOTES.md").write_text("Router endpoint: tls/r.example:7447\n")
+            with zipfile.ZipFile(_build(tmp)) as z:
+                self.assertIn("certs/NOTES.md", z.namelist())
+
+    def test_installer_asks_bundle_and_name_before_mode(self):
+        s = pkg.INSTALL_PS1
+        self.assertLess(s.index("# ---- 1. language"), s.index("# ---- 2. certificate bundle"))
+        self.assertLess(s.index("# ---- 2. certificate bundle"), s.index("# ---- 3. mode"))
+
+    def test_every_prompt_loop_is_bounded(self):
+        self.assertNotIn("while ($true)", pkg.INSTALL_PS1)
+        self.assertNotRegex(pkg.INSTALL_PS1, r"while \(-not")
+
+
 class BundledPythonTests(unittest.TestCase):
     """Package layout with the bundled Python, built from fake downloads (no network)."""
 

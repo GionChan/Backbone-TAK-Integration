@@ -30,7 +30,8 @@ demo/
   tools/                live_monitor.py read_cot.py verify_efdi.py
   edge_ai/              edge-AI demo (own Dockerfile; copies relay/heartbeat.py + identity.py)
   run-backbone-demo.ps1 setup-certs.ps1
-tools/                  make_relay_package.py (field ZIP), register_portal_topics.py (WRITES PORTAL)
+tools/                  make_relay_package.py (field ZIP; --template = publishable, no cert),
+                        check_release.py (versions agree), register_portal_topics.py (WRITES PORTAL)
   field_package/        installer scripts + READMEs for the ZIP; lang.ps1 holds every message (fi, en)
                         bundled Python: make_relay_package.EMBED_PYTHON (pinned SHA256) + FIELD_REQUIREMENTS
 tests/                  unittest; e2e_gateway.py needs a local router
@@ -100,6 +101,11 @@ GATEWAY_WATCHDOG_S, GATEWAY_LOST_S. Video: GATEWAY_VIDEO*.
 | `<org>/exercise/**`, `<org>/tak/cot/v1/EXERCISE.*` | demo out | sender.py |
 
 Spec: docs/asyncapi-tak-gateway.yaml.
+
+## Releasing
+
+Tag vX.Y.Z = publish (docs/en/release.md). Never push a tag without the user's explicit consent.
+__version__, docker-compose image tag and the newest CHANGELOG section must agree (check_release.py).
 
 ## Changing things
 

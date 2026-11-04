@@ -14,7 +14,8 @@ python tools/make_relay_package.py --system field-relay-01                   # �
 
 | Valitsin | Oletus | Merkitys |
 | --- | --- | --- |
-| `--system` | pakollinen | Laitteen yksilöllinen nimi: `GATEWAY_SYSTEM`, heartbeat-topic, tiedostonimi |
+| `--system` | pakollinen (ei `--template`-valinnan kanssa) | Laitteen yksilöllinen nimi: `GATEWAY_SYSTEM`, heartbeat-topic, tiedostonimi |
+| `--template` | pois | Ei varmennetta eikä laitteen nimeä (voi jakaa); `install.cmd` kysyy molemmat. Tämä julkaistaan [julkaisussa](release.md) |
 | `--lang` | kysytään asennuksessa | `fi` tai `en`: asentimen ja sen viestien kieli |
 | `--mode` | kysytään asennuksessa | `direct`, `multicast` tai `server` ([tilat](modes.md)) |
 | `--tak-server`, `--tak-p12`, `--tak-trust-p12` | – | `server`-tila: osoite ja .p12-tiedostot (kopioidaan kansioon `certs/tak/`). Salasana kysytään asennuksessa |

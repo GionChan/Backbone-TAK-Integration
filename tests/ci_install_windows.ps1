@@ -1,10 +1,13 @@
 # CI only (windows-latest, admin runner): installs the field package the way a user does and checks it.
 #   1. English + direct, bundled Python, with every Python hidden from PATH (proves no Python needed)
 #   2. Finnish + local network + device uid, package without bundled Python (venv + pip path)
+#   3. Template package (no certificate, no name): bundle given as a .zip, device name typed in.
+#      -TemplateZip <zip> runs only this case, on that exact zip (the release artifact).
 # Each run: build the package (fake bundle), unzip, install.ps1 under Windows PowerShell 5.1 with
 # answers on stdin, check device.env, the printed language, the running relay (/status), then
 # uninstall and check that the task and the processes are gone.
 # The fake certificate means the relay cannot reach the fabric; it still serves /status.
+param([string]$TemplateZip = "")
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
 $root = Join-Path ([IO.Path]::GetTempPath()) "field-install-ci"
@@ -25,18 +28,29 @@ function Get-Status([int]$Port, [int]$WaitSeconds) {
 }
 
 function Test-Install([string]$Name, [string]$System, [string[]]$Answers, [hashtable]$ExpectEnv, [string[]]$ExpectText,
-                      [string[]]$BuildArgs = @(), [switch]$HidePython) {
+                      [string[]]$BuildArgs = @(), [switch]$HidePython, [string]$Zip = "", [switch]$Template) {
     Write-Host "`n=== $Name"
     $work = Join-Path $root $System
-    $certs = Join-Path $work "bundle"
+    $certs = Join-Path $work "bundle\efdi-onboarding-ci"
     New-Item -ItemType Directory $certs -Force | Out-Null
     $slot = "0123456789abcdef0123456789abcdef"
     "fake-cert" | Set-Content (Join-Path $certs "$slot-cert.pem")
     "fake-key" | Set-Content (Join-Path $certs "$slot-key.pem")
     "fake-ca" | Set-Content (Join-Path $certs "efdi-ca-root.pem")
-    python (Join-Path $repo "tools\make_relay_package.py") --system $System --cert-dir $certs --out (Join-Path $work "pkg.zip") @BuildArgs | Out-Null
+    "Router endpoint:     tls/router.invalid:7447" | Set-Content (Join-Path $certs "NOTES.md")
+    $bundleZip = Join-Path $work "efdi-onboarding-ci.zip"
+    Compress-Archive -Path (Join-Path $work "bundle\*") -DestinationPath $bundleZip
+    if (-not $Zip) {
+        $Zip = Join-Path $work "pkg.zip"
+        $target = if ($Template) { @("--template") } else { @("--system", $System, "--cert-dir", $certs) }
+        python (Join-Path $repo "tools\make_relay_package.py") @target --out $Zip @BuildArgs | Out-Null
+    }
     $pkg = Join-Path $work "pkg"
-    Expand-Archive (Join-Path $work "pkg.zip") $pkg
+    Expand-Archive $Zip $pkg
+    if ($Template) {
+        Check "$Name / template has no certificate" (@(Get-ChildItem (Join-Path $pkg "certs") -Recurse -Include *.pem, *.key, *.p12).Count -eq 0)
+        $Answers = $Answers | ForEach-Object { $_ -replace '<BUNDLE>', $bundleZip }
+    }
     $bundledPython = Join-Path $pkg "python\python.exe"
     Check "$Name / bundled Python present = $(-not ($BuildArgs -contains '--no-bundled-python'))" `
         ((Test-Path $bundledPython) -eq (-not ($BuildArgs -contains '--no-bundled-python')))
@@ -67,6 +81,13 @@ function Test-Install([string]$Name, [string]$System, [string[]]$Answers, [hasht
         Check "$Name / device.env $k=$($ExpectEnv[$k])" ($envValues[$k] -eq $ExpectEnv[$k]) "got '$($envValues[$k])'"
     }
     foreach ($t in $ExpectText) { Check "$Name / prints '$t'" ($out -like "*$t*") }
+    if ($Template) {
+        Check "$Name / certificate copied from the zip" (Test-Path (Join-Path $pkg "certs\$slot-cert.pem"))
+        Check "$Name / key copied" (Test-Path (Join-Path $pkg "certs\$slot-key.pem"))
+        Check "$Name / NOTES.md copied (router)" (Test-Path (Join-Path $pkg "certs\NOTES.md"))
+        Check "$Name / unpacked bundle removed from temp" `
+            (@(Get-ChildItem ([IO.Path]::GetTempPath()) -Filter "efdi-bundle-*" -ErrorAction SilentlyContinue).Count -eq 0)
+    }
 
     $status = Get-Status 8088 120
     Check "$Name / relay answers on :8088" ($null -ne $status)
@@ -100,6 +121,19 @@ function Test-Install([string]$Name, [string]$System, [string[]]$Answers, [hasht
     Check "$Name / port 8088 free again" ($null -eq (Get-Status 8088 5))
 }
 
+# 3. Template: no certificate, no name. Answers: 2 = English, bundle zip, device name, 1 = direct.
+$templateCase = @{
+    Name = "en-template"; System = "ci-relay-tpl"; Answers = @("2", "<BUNDLE>", "ci-relay-tpl", "1")
+    ExpectEnv = @{ RELAY_LANG = "en"; TAK_MODE = "direct"; GATEWAY_SYSTEM = "ci-relay-tpl" }
+    ExpectText = @("No EFDI certificate bundle found", "Certificate copied", "Installation complete.")
+}
+if ($TemplateZip) {
+    Test-Install @templateCase -Zip (Resolve-Path $TemplateZip).Path -Template -HidePython
+    if ($failures.Count -gt 0) { Write-Host "`nINSTALL TEST FAILED: $($failures -join '; ')"; exit 1 }
+    Write-Host "`nINSTALL TEST PASSED"
+    exit 0
+}
+
 # 1. English, direct, bundled Python, no Python on PATH. Answers: 2 = English, 1 = direct.
 Test-Install "en-direct" "ci-relay-en" @("2", "1") `
     @{ RELAY_LANG = "en"; TAK_MODE = "direct" } `
@@ -111,6 +145,8 @@ Test-Install "fi-multicast" "ci-relay-fi" @("1", "2", "ANDROID-ci") `
     @{ RELAY_LANG = "fi"; TAK_MODE = "multicast"; TAK_INGEST_UIDS = "ANDROID-ci" } `
     @("Valitse kieli", "Asennus valmis.", "Seuraavaksi TAK-ohjelmaan:") `
     -BuildArgs @("--no-bundled-python")
+
+Test-Install @templateCase -Template -BuildArgs @("--no-bundled-python")
 
 Write-Host ""
 if ($failures.Count -gt 0) { Write-Host "INSTALL TEST FAILED: $($failures -join '; ')"; exit 1 }

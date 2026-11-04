@@ -1,0 +1,162 @@
+name: Release
+
+# Tag vX.Y.Z (must equal relay __version__ and the newest CHANGELOG section) publishes:
+#   - image ghcr.io/<owner>/efdi-tak-relay:X.Y.Z, :X.Y, :latest (linux/amd64 + linux/arm64,
+#     SBOM and provenance attached). A new GHCR package of a private repo is private.
+#   - GitHub Release with the field-package template (no certificate inside) and SHA256SUMS.
+# feature/** pushes and workflow_dispatch are a dry run: everything is built and tested,
+# nothing is published.
+on:
+  push:
+    tags: ["v*.*.*"]
+    branches: ["feature/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      publish: ${{ steps.v.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: Versions agree (tag, relay, CHANGELOG, compose)
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            python3 tools/check_release.py --tag "$GITHUB_REF_NAME" --notes notes.md
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            python3 tools/check_release.py --notes notes.md
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: notes.md
+
+  image:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Image names
+        id: meta
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/efdi-tak-relay"
+          v="${{ needs.check.outputs.version }}"
+          echo "tags=$image:$v,$image:${v%.*},$image:latest" >> "$GITHUB_OUTPUT"
+      - name: Log in to GHCR
+        if: needs.check.outputs.publish == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build (amd64 + arm64), push only for a tag
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: relay
+          platforms: linux/amd64,linux/arm64
+          push: ${{ needs.check.outputs.publish == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=EFDI TAK relay
+            org.opencontainers.image.version=${{ needs.check.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=Apache-2.0
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Each architecture runs (relay, doctor, mediamtx, dependencies)
+        run: |
+          for arch in amd64 arm64; do
+            docker buildx build --platform "linux/$arch" --target relay --load -t "relay-$arch" \
+              --cache-from type=gha .
+            docker run --rm --platform "linux/$arch" "relay-$arch" python3 -c \
+              "import zenoh, cryptography, av, PIL, platform; print('$arch ok', platform.machine())"
+            docker run --rm --platform "linux/$arch" "relay-$arch" mediamtx --version
+            docker run --rm --platform "linux/$arch" -e GOAT_LOCAL_ROUTER=tcp/127.0.0.1:1 "relay-$arch" \
+              python3 relay/doctor.py | tail -3
+          done
+
+  field-package:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the template (bundled Python, no certificate)
+        run: |
+          v="${{ needs.check.outputs.version }}"
+          python tools/make_relay_package.py --template --out "release/efdi-tak-relay-$v-windows-x64.zip"
+      - name: Nothing secret inside
+        run: |
+          python3 - release/*.zip <<'EOF'
+          import sys, zipfile
+          z = zipfile.ZipFile(sys.argv[1])
+          bad = [n for n in z.namelist() if n.startswith("certs/") and n != "certs/README.txt"]
+          bad += [n for n in z.namelist() if n.lower().endswith((".pem", ".key", ".p12", ".cbor"))]
+          env = z.read("device.env").decode()
+          bad += [ln for ln in env.splitlines() if ln.startswith(("GOAT_ORG=", "GATEWAY_SYSTEM=", "TAK_SERVER"))]
+          assert not bad, f"template must not contain: {bad}"
+          print("template clean:", len(z.namelist()), "files")
+          EOF
+      - name: Checksums
+        run: cd release && sha256sum *.zip > SHA256SUMS && cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: field-package
+          path: release/
+
+  install-template:
+    # Installs the exact template that would be published, on Windows with no Python on PATH.
+    needs: field-package
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: field-package
+          path: release
+      - name: Install the template, check, uninstall
+        run: ./tests/ci_install_windows.ps1 -TemplateZip (Get-ChildItem release\*.zip | Select-Object -First 1).FullName
+
+  publish:
+    if: needs.check.outputs.publish == 'true'
+    needs: [check, image, field-package, install-template]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" artifacts/field-package/* \
+            --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "EFDI TAK relay ${{ needs.check.outputs.version }}" \
+            --notes-file artifacts/release-notes/notes.md

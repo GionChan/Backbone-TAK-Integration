@@ -1,6 +1,7 @@
 # TAK relay installer.
-#   1. language (fi / en)   2. mode (direct / local network / TAK Server)   3. mode questions
-#   4. dependencies   5. automatic start   6. start now and check /status   7. what to set in TAK
+#   1. language (fi / en)   2. certificate bundle and device name (template package only)
+#   3. mode (direct / local network / TAK Server) and its questions   4. dependencies
+#   5. automatic start   6. start now and check /status   7. what to set in TAK
 # Choices are saved in device.env; a choice already there is not asked again.
 #
 # Usage:  install.cmd                       (asks)
@@ -46,11 +47,17 @@ function Set-EnvValue([string]$Key, [string]$Value) {
     Set-Item -Path "Env:$Key" -Value $Value
 }
 
+function Stop-AfterTries([int]$Try) {
+    # Read-Host returns "" forever once input ends; never loop without end.
+    if ($Try -ge 10) { Write-Host (T "too_many_tries") -ForegroundColor Red; exit 1 }
+}
+
 function Read-Choice([string[]]$Valid) {
-    while ($true) {
+    for ($try = 1; ; $try++) {
         $a = "$(Read-Host (T 'choice'))".Trim()
         if ($Valid -contains $a) { return $a }
         Write-Host (T "invalid") -ForegroundColor Yellow
+        Stop-AfterTries $try
     }
 }
 
@@ -62,11 +69,43 @@ function Read-Value([string]$Prompt, [string]$Default = "") {
 }
 
 function Read-File([string]$Prompt, [string]$Default) {
-    while ($true) {
-        $path = Read-Value $Prompt $Default
+    for ($try = 1; ; $try++) {
+        $path = (Read-Value $Prompt $Default).Trim('"')
         if ($path -and (Test-Path $path -PathType Leaf)) { return $path }
         Write-Host (T "srv_missing_file" $path) -ForegroundColor Yellow
+        Stop-AfterTries $try
     }
+}
+
+function Find-Bundle([string]$Dir) {
+    # Exactly one <slot>-cert.pem with its -key.pem under $Dir, plus a CA -> hashtable, else $null.
+    $pairs = @(Get-ChildItem $Dir -Recurse -Filter "*-cert.pem" -ErrorAction SilentlyContinue |
+            Where-Object { Test-Path ($_.FullName -replace '-cert\.pem$', '-key.pem') })
+    if ($pairs.Count -ne 1) { return $null }
+    $folder = $pairs[0].DirectoryName
+    $ca = Join-Path $folder "efdi-ca-root.pem"
+    if (-not (Test-Path $ca)) {
+        $ca = @(Get-ChildItem $folder -Filter *.pem | Where-Object { $_.Name -notmatch 'cert|key' } |
+                Select-Object -First 1 | ForEach-Object { $_.FullName })[0]
+    }
+    if (-not $ca) { return $null }
+    return @{ cert = $pairs[0].FullName; key = ($pairs[0].FullName -replace '-cert\.pem$', '-key.pem');
+              ca = $ca; notes = (Join-Path $folder "NOTES.md"); tmp = $null }
+}
+
+function Open-Bundle([string]$Path) {
+    # A folder, or a .zip / .tar.gz unpacked to a temporary folder (removed after copying).
+    if (Test-Path $Path -PathType Container) { return Find-Bundle $Path }
+    if (-not (Test-Path $Path -PathType Leaf)) { return $null }
+    $tmp = Join-Path ([IO.Path]::GetTempPath()) ("efdi-bundle-" + [guid]::NewGuid())
+    New-Item -ItemType Directory $tmp | Out-Null
+    try {
+        if ($Path -match '\.zip$') { Expand-Archive -Path $Path -DestinationPath $tmp }
+        elseif ($Path -match '\.(tar\.gz|tgz)$') { tar -xzf $Path -C $tmp }
+    } catch {}
+    $b = Find-Bundle $tmp
+    if ($b) { $b.tmp = $tmp } else { Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue }
+    return $b
 }
 
 $cfg = Read-DeviceEnv $envFile
@@ -79,17 +118,53 @@ if ($Lang -notin @("fi", "en")) {
     Write-Host "Valitse kieli / Choose language"
     Write-Host "  1) Suomi"
     Write-Host "  2) English"
-    while ($true) {
+    for ($try = 1; ; $try++) {
         $a = "$(Read-Host 'Valinta / Choice')".Trim()
         if ($a -eq "1") { $Lang = "fi"; break }
         if ($a -eq "2") { $Lang = "en"; break }
+        if ($try -ge 10) { Write-Host "Liian monta virheellistä vastausta / Too many invalid answers." -ForegroundColor Red; exit 1 }
     }
 }
 Set-EnvValue "RELAY_LANG" $Lang
 Write-Host ""
 Write-Host (T "title") -ForegroundColor Cyan
 
-# ---- 2. mode
+# ---- 2. certificate bundle and device name (a template package has neither)
+$certDir = Join-Path $here "certs"
+if (-not (Find-Bundle $certDir)) {
+    Write-Host ""
+    Write-Host (T "bundle_title")
+    $downloads = Join-Path $env:USERPROFILE "Downloads"
+    $default = @(Get-ChildItem $downloads -Filter "efdi-onboarding*" -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1 | ForEach-Object { $_.FullName })[0]
+    for ($try = 1; ; $try++) {
+        $path = (Read-Value (T "bundle_prompt") $default).Trim('"')
+        $bundle = if ($path) { Open-Bundle $path } else { $null }
+        if ($bundle) { break }
+        Write-Host (T "bundle_bad" $path) -ForegroundColor Yellow
+        Stop-AfterTries $try
+    }
+    New-Item -ItemType Directory $certDir -Force | Out-Null
+    Copy-Item -Path @($bundle.cert, $bundle.key) -Destination $certDir
+    Copy-Item -Path $bundle.ca -Destination (Join-Path $certDir "efdi-ca-root.pem")
+    if (Test-Path $bundle.notes) { Copy-Item -Path $bundle.notes -Destination $certDir }
+    if ($bundle.tmp) { Remove-Item -Recurse -Force $bundle.tmp -ErrorAction SilentlyContinue }
+    Write-Host (T "bundle_copied" (Split-Path $bundle.cert -Leaf)) -ForegroundColor Green
+}
+if (-not $env:GATEWAY_SYSTEM) {
+    Write-Host ""
+    Write-Host (T "system_note")
+    $default = ("tak-relay-" + "$env:COMPUTERNAME".ToLower()) -replace '[^a-z0-9-]', '-'
+    for ($try = 1; ; $try++) {
+        $name = Read-Value (T "system_prompt") $default
+        if ($name -cmatch '^[a-z0-9][a-z0-9-]{2,62}$') { break }
+        Write-Host (T "system_bad") -ForegroundColor Yellow
+        Stop-AfterTries $try
+    }
+    Set-EnvValue "GATEWAY_SYSTEM" $name
+}
+
+# ---- 3. mode
 if (-not $Mode) { $Mode = $cfg["TAK_MODE"] }
 if ($Mode -notin @("direct", "multicast", "server")) {
     Write-Host ""
@@ -102,12 +177,15 @@ if ($Mode -notin @("direct", "multicast", "server")) {
 Set-EnvValue "TAK_MODE" $Mode
 Write-Host (T "mode_set" (T "mode_$Mode")) -ForegroundColor Green
 
-# ---- 3. questions for the mode
+# ---- questions for the mode
 if ($Mode -eq "server") {
     Write-Host (T "srv_hint")
     if (-not $env:TAK_SERVER) {
         $srv = ""
-        while (-not $srv) { $srv = Read-Value (T "srv_address") }
+        for ($try = 1; -not $srv; $try++) {
+            $srv = Read-Value (T "srv_address")
+            if (-not $srv) { Stop-AfterTries $try }
+        }
         Set-EnvValue "TAK_SERVER" $srv
     }
     $p12s = @(Get-ChildItem (Join-Path $here "certs\tak") -Filter *.p12 -ErrorAction SilentlyContinue)

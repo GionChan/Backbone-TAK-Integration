@@ -87,6 +87,7 @@ sertifikaatteja kaikki toimii paikallista reititintä vasten ilman verkkoyhteytt
 | Relay: asetukset, topicit, operointi, tietoturva | [relay](docs/fi/relay.md) | [relay](docs/en/relay.md) |
 | Demo: skenaariot, lähetin, näkymät | [demo](docs/fi/demo.md) | [demo](docs/en/demo.md) |
 | Kenttälaitepaketti (Windows, ei Dockeria) | [kenttäpaketti](docs/fi/field-package.md) | [field package](docs/en/field-package.md) |
+| Julkaiseminen: image, kenttäpaketin pohja | [julkaisu](docs/fi/release.md) | [release](docs/en/release.md) |
 | Vianetsintä | [vianetsintä](docs/fi/troubleshooting.md) | [troubleshooting](docs/en/troubleshooting.md) |
 | Rajapintakuvaus | [`docs/asyncapi-tak-gateway.yaml`](docs/asyncapi-tak-gateway.yaml) | |
 | Muutokset | [CHANGELOG](CHANGELOG.md) | |

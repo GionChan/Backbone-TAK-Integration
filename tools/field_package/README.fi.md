@@ -16,6 +16,9 @@ Asennin asettaa relayn käynnistymään automaattisesti.
 
 ## Asennus
 
+Jos tämä on julkaisun pohjapaketti, asennin kysyy ensin EFDI-varmennepaketin (kansio, `.zip`
+tai `.tar.gz`) ja laitteen nimen.
+
 Pura zip mihin tahansa kansioon ja kaksoisnapsauta `install.cmd`. Jos Windows varoittaa
 ("Windows protected your PC"), valitse "More info" → "Run anyway".
 
