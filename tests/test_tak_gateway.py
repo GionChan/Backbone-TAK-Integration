@@ -120,10 +120,19 @@ class IngestTests(unittest.TestCase):
 
     def test_markers_the_relay_sent_are_not_echoed_back(self):
         gw.OUTPUTS[:] = [_Capture()]
-        gw.dispatch(self._pli("vendor-x.track-7"))       # backbone -> TAK
-        gw.ingest_event(self._pli("vendor-x.track-7"), "udp_in@127.0.0.1")  # TAK client forwards it back
+        event = bc.make_cot("vendor-x.track-7", "a-f-G-U-C", 60.1, 24.9, now=1_800_000_000)
+        gw.dispatch(event)                                   # backbone -> TAK
+        gw.ingest_event(event, "udp_in@127.0.0.1")           # a TAK client forwards it back untagged
         self.assertEqual(self._published(), [])
         self.assertEqual(gw.COUNTERS['gateway_ingest_dropped_total{reason="echo"}'], 1)
+
+    def test_fresh_own_position_is_published_after_a_mirrored_copy(self):
+        # Someone mirrored an older position of our device back via the backbone; the relay sent it
+        # to TAK. The device's next, newer position must still be published.
+        gw.OUTPUTS[:] = [_Capture()]
+        gw.dispatch(bc.make_cot("ANDROID-own1", "a-f-G-U-C", 60.1, 24.9, now=time.time() - 3))
+        gw.ingest_event(bc.make_cot("ANDROID-own1", "a-f-G-U-C", 60.1, 24.9), "udp_in@127.0.0.1")
+        self.assertEqual(self._published(), [f"{gw.gc.ORG}/tak/pli/v1/ANDROID-own1"])
 
     def test_lan_needs_the_allowlist(self):
         with mock.patch.object(gw, "INGEST_FROM", frozenset({"local", "lan"})):
@@ -149,6 +158,11 @@ class IngestTests(unittest.TestCase):
 
 
 class TagTests(unittest.TestCase):
+    def test_self_closing_detail_with_space(self):
+        tagged = gw.tag(b'<event uid="u5"><point lat="1" lon="1"/><detail /></event>')
+        self.assertEqual(ET.fromstring(tagged).findall("detail")[0].find("__efdi_relay").tag, "__efdi_relay")
+        self.assertEqual(len(ET.fromstring(tagged).findall("detail")), 1)
+
     def test_tag_goes_inside_detail_once(self):
         for raw in (IngestTests._pli("u1"),
                     b'<event uid="u2"><point lat="1" lon="1"/><detail/></event>',

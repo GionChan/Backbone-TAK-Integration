@@ -146,9 +146,10 @@ def check_running_relay() -> bool:
     return True
 
 
-def check_ports() -> None:
-    ports = [("tcp", int(os.environ.get("TAK_PORT", "8087")), "TAK TCP stream"),
-             ("tcp", int(os.environ.get("GATEWAY_HTTP_PORT", "8088")), "HTTP status")]
+def check_ports(m) -> None:
+    ports = [("tcp", int(os.environ.get("GATEWAY_HTTP_PORT", "8088")), "HTTP status")]
+    if m and any(o["type"] == "tcp_server" for o in tak_links.outputs(m)):
+        ports.insert(0, ("tcp", int(os.environ.get("TAK_PORT", "8087")), "TAK TCP stream"))
     if int(os.environ.get("TAK_UDP_IN_PORT", "0")):
         ports.append(("udp", int(os.environ["TAK_UDP_IN_PORT"]), "UDP input"))
     for proto, port, what in ports:
@@ -198,6 +199,8 @@ def check_mode():
 
 
 def check_tak_side(m) -> None:
+    if m is None:  # configuration error, already reported
+        return
     in_docker = os.path.exists("/.dockerenv")
     local_out = m == "direct" or (m == "server" and os.environ.get("TAK_LOCAL_OUTPUTS", "0") == "1")
     for t in (tak_links.udp_targets() if local_out else []):
@@ -243,7 +246,7 @@ def main() -> int:
     check_router(cert)
     m = check_mode()
     if not check_running_relay():
-        check_ports()
+        check_ports(m)
     check_tak_side(m)
     failed = RESULTS.count("FAIL")
     print(f"\n{failed} failure(s), {RESULTS.count('WARN')} warning(s)")

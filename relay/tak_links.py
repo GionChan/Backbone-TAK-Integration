@@ -26,6 +26,7 @@ TAK Server env:
 """
 import os
 import shutil
+import socket
 import ssl
 import tempfile
 
@@ -45,16 +46,38 @@ def mode() -> str:
     return m
 
 
-def multicast_group() -> tuple:
-    host, _, port = os.environ.get("TAK_MULTICAST_GROUP", SA_GROUP).rpartition(":")
+def _host_port(value: str, name: str, default_port: str = None) -> tuple:
+    host, sep, port = value.strip().rpartition(":")
+    if not sep:
+        host, port = value.strip(), default_port
+    if not host or not port or not port.isdigit() or not 0 < int(port) < 65536:
+        raise ConfigError(f"{name}={value!r}: use host:port")
     return host, int(port)
+
+
+def _ipv4(value: str, name: str) -> str:
+    try:
+        socket.inet_aton(value)
+    except OSError:
+        raise ConfigError(f"{name}={value!r}: use an IPv4 address") from None
+    return value
+
+
+def multicast_group() -> tuple:
+    host, port = _host_port(os.environ.get("TAK_MULTICAST_GROUP", SA_GROUP), "TAK_MULTICAST_GROUP")
+    if not 224 <= int(_ipv4(host, "TAK_MULTICAST_GROUP").split(".")[0]) <= 239:
+        raise ConfigError(f"TAK_MULTICAST_GROUP={host!r} is not a multicast address (224-239.x.x.x)")
+    return host, port
 
 
 def multicast_output() -> dict:
     host, port = multicast_group()
-    return {"type": "udp", "host": host, "port": port, "multicast": True,
-            "ttl": int(os.environ.get("TAK_MULTICAST_TTL", "1")),
-            "iface": os.environ.get("TAK_MULTICAST_IF", "")}
+    iface = os.environ.get("TAK_MULTICAST_IF", "").strip()
+    ttl = os.environ.get("TAK_MULTICAST_TTL", "1")
+    if not ttl.isdigit() or not 0 < int(ttl) < 256:
+        raise ConfigError(f"TAK_MULTICAST_TTL={ttl!r}: use 1-255")
+    return {"type": "udp", "host": host, "port": port, "multicast": True, "ttl": int(ttl),
+            "iface": _ipv4(iface, "TAK_MULTICAST_IF") if iface else ""}
 
 
 def outputs(m: str = None) -> list:
@@ -87,8 +110,8 @@ def udp_targets() -> list:
         f'{os.environ.get("TAK_HOST", "127.0.0.1")}:{os.environ.get("TAK_UDP_PORT", "6969")}')
     out = []
     for t in filter(None, (x.strip() for x in targets.split(","))):
-        host, _, port = t.rpartition(":")
-        out.append({"type": "udp", "host": host, "port": int(port)})
+        host, port = _host_port(t, "TAK_UDP_TARGETS")
+        out.append({"type": "udp", "host": host, "port": port})
     return out
 
 
@@ -97,11 +120,9 @@ def tak_server() -> dict:
     target = os.environ.get("TAK_SERVER", "").strip()
     if not target:
         return None
-    host, sep, port = target.rpartition(":")
-    if not sep:
-        host, port = target, "8089"
-    cfg = {"type": "tcp_client", "host": host, "port": int(port)}
-    if os.environ.get("TAK_SERVER_TLS", "0" if port == "8087" else "1") != "1":
+    host, port = _host_port(target, "TAK_SERVER", "8089")
+    cfg = {"type": "tcp_client", "host": host, "port": port}
+    if os.environ.get("TAK_SERVER_TLS", "0" if port == 8087 else "1") != "1":
         return cfg
     env = os.environ.get
     tls = {

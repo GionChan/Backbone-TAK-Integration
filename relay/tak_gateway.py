@@ -94,7 +94,9 @@ INGEST_UIDS = _csv_set("TAK_INGEST_UIDS")            # empty = any local device 
 # Added to every CoT the relay sends, so no relay re-publishes what a relay put on TAK.
 RELAY_TAG = b"<__efdi_relay/>"
 _ECHO_S = 60.0
-_forwarded: dict = {}                                # uid -> last time the relay sent it to TAK
+# (uid, CoT time) -> when the relay sent it to TAK. Keyed on the event time too: a fresh position
+# from your own device must still be published even if someone mirrored an older one back to us.
+_forwarded: dict = {}
 _forwarded_lock = threading.Lock()
 _COT_TYPE = os.environ.get("COT_TYPE", "a-h-A-M-F-Q")
 INGEST_ALL = os.environ.get("GATEWAY_INGEST_ALL", "0") == "1"
@@ -177,19 +179,23 @@ def _safe_key(uid: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "_", uid)[:96] or "unknown"
 
 
-def _recently_forwarded(uid: str) -> bool:
+def _recently_forwarded(uid: str, when: str) -> bool:
     with _forwarded_lock:
-        t = _forwarded.get(uid)
+        t = _forwarded.get((uid, when))
     return t is not None and time.time() - t < _ECHO_S
 
 
 def _remember_forwarded(data: bytes) -> None:
-    uid = cot_guard.uid_of(data)
+    try:
+        root = ET.fromstring(data.strip().split(b"?>", 1)[-1] if data.lstrip().startswith(b"<?") else data.strip())
+    except ET.ParseError:
+        return
+    uid = root.get("uid", "")
     if not uid:
         return
     now = time.time()
     with _forwarded_lock:
-        _forwarded[uid] = now
+        _forwarded[(uid, root.get("time", ""))] = now
         if len(_forwarded) > 20000:
             for k in [k for k, t in _forwarded.items() if now - t > _ECHO_S]:
                 _forwarded.pop(k, None)
@@ -202,8 +208,9 @@ def tag(data: bytes) -> bytes:
     i = data.rfind(b"</detail>")
     if i >= 0:
         return data[:i] + RELAY_TAG + data[i:]
-    if b"<detail/>" in data:
-        return data.replace(b"<detail/>", b"<detail>" + RELAY_TAG + b"</detail>", 1)
+    m = re.search(rb"<detail\s*/>", data)
+    if m:
+        return data[:m.start()] + b"<detail>" + RELAY_TAG + b"</detail>" + data[m.end():]
     j = data.rfind(b"</event>")
     return data[:j] + b"<detail>" + RELAY_TAG + b"</detail>" + data[j:] if j >= 0 else data
 
@@ -234,7 +241,7 @@ def ingest_event(ev: bytes, origin: str, kind: str = "local") -> None:
     if (INGEST_UIDS or kind == "lan") and uid not in INGEST_UIDS:
         inc('gateway_ingest_dropped_total{reason="not-allowed"}')
         return
-    if _recently_forwarded(uid):
+    if _recently_forwarded(uid, root.get("time", "")):
         inc('gateway_ingest_dropped_total{reason="echo"}')
         return
     if not _pli_limiter.allow(uid):
@@ -790,10 +797,10 @@ def main() -> None:
         raise SystemExit(f"configuration error: {_MODE_ERROR}")
     try:
         cfg = load_config()
-    except tak_links.ConfigError as exc:
-        raise SystemExit(f"configuration error: {exc}") from None
-    INGEST[0] = bool(cfg.get("ingest"))
-    OUTPUTS.extend(build_outputs(cfg))
+        INGEST[0] = bool(cfg.get("ingest"))
+        OUTPUTS.extend(build_outputs(cfg))
+    except (ValueError, RuntimeError, OSError) as exc:  # ConfigError, bad .p12 / PEM, ssl.SSLError
+        raise SystemExit(f"configuration error: {exc}  (check with: python relay/doctor.py)") from None
     port = int(os.environ.get("GATEWAY_HTTP_PORT", "8088"))
     threading.Thread(target=ThreadingHTTPServer(("", port), Ops).serve_forever, daemon=True).start()
     log(f"v{__version__} mode={MODE} org={gc.ORG} outputs={[o.name for o in OUTPUTS]} ingest={INGEST[0]} "

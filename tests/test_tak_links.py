@@ -70,6 +70,14 @@ class ModeTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"TAK_MODE": "broadcast"}), self.assertRaises(tak_links.ConfigError):
             tak_links.mode()
 
+    def test_bad_values_are_config_errors_not_tracebacks(self):
+        for env in ({"TAK_SERVER": "tak.example:abc"}, {"TAK_UDP_TARGETS": "hostonly"},
+                    {"TAK_MODE": "multicast", "TAK_MULTICAST_IF": "eth0"},
+                    {"TAK_MODE": "multicast", "TAK_MULTICAST_GROUP": "10.0.0.1:6969"},
+                    {"TAK_MODE": "multicast", "TAK_MULTICAST_TTL": "0"}):
+            with self.subTest(env=env), self.assertRaises(tak_links.ConfigError):
+                self._outputs(**env)
+
     def test_multicast_ingest_defaults_include_lan(self):
         self.assertEqual(tak_links.default_ingest_from("multicast"), "local,lan")
         self.assertEqual(tak_links.default_ingest_from("server"), "local")
