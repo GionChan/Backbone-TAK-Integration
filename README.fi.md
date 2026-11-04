@@ -5,11 +5,12 @@
 **In English:** [README.md](README.md) · **Tekoälyagenteille:** [AGENTS.md](AGENTS.md)
 
 Kaksisuuntainen silta **EFDI goat -fabricin** (Zenoh, mTLS, NetBird-mesh) ja
-**TAK-sovellusten** (WinTAK, ATAK, TAK Server) välillä.
+**TAK-sovellusten** (WinTAK, ATAK, muut CoT-sovellukset ja TAK Server) välillä.
 
-- **Backbone → TAK.** Jokainen tunnistettava sijaintiviesti muuttuu CoT-merkiksi: muiden
-  valmistajien valmis CoT-XML, `goat.geo.track.v1`, MAVLink, Consilium, HYMOTS, Orion, ADS-B,
-  protobuf-radat ja oma JSON-telemetria. Viestit tarkistetaan, niiden tahtia rajoitetaan ja
+- **Backbone → TAK.** Jokainen tunnistettava sijaintiviesti muuttuu CoT-merkiksi: valmis
+  CoT-XML, `goat.geo.track.v1`, MAVLink, ADS-B, protobuf-radat, useat valmistajakohtaiset
+  ratamuodot ja oma JSON-telemetria (koko luettelo: [relay](docs/fi/relay.md#tunnistetut-muodot)).
+  Viestit tarkistetaan, niiden tahtia rajoitetaan ja
   kaksoiskappaleet poistetaan ennen kuin ne lähetetään asiakkaalle.
 - **TAK → backbone.** Valinnaisesti omien TAK-käyttäjien sijainnit (PLI) julkaistaan backboneen.
 - **Operointi.** Pakollinen heartbeat, `/healthz`, Prometheus-mittarit (`/metrics`), `/status`,
@@ -49,7 +50,7 @@ Valitse `.env`-tiedostossa `TAK_MODE`-muuttujalla, miten TAK-laitteet saavat til
 `direct` (oletus), `multicast` (TAKiin ei aseteta mitään, vain suljetut verkot) tai `server` (syötä
 TAK Serveriä). Ks. [tilan valinta](docs/fi/modes.md). `direct`-tilassa ohjaa TAK-sovellus relayhin:
 
-- **TAK app:** UDP-tulo 6969 Docker-isännällä (oletuskohde).
+- **TAK-sovellus, jossa on UDP-tulo:** portti 6969 Docker-isännällä (oletuskohde).
 - **WinTAK:** lisää `host.docker.internal:4242` muuttujaan `TAK_UDP_TARGETS` (`.env`).
 - **ATAK tai WinTAK TCP:llä:** TAK Server → TCP Streaming → `<relayn-osoite>:8087`.
 - **TAK Server:** aseta `.env`-tiedostoon `TAK_SERVER` ja sen .p12-tiedostot. Silloin jokainen
@@ -105,9 +106,8 @@ CI ajaa yksikkötestit Windowsilla ja Linuxilla jokaisesta main-haaran pushista 
 
 ## Tila
 
-Relayn koko
-polku (asennus → terve tila oikeaa fabricia vasten → CoT useilta valmistajilta → poisto) on
-varmistettu Windows-kenttälaitteilla. Oikealla TAK-asiakkaalla ei ole varmistettu ATAK-
+Relayn koko polku (asennus → terve tila oikeaa fabricia vasten → CoT useilta valmistajilta →
+poisto) on varmistettu Windows-kenttälaitteilla. Oikealla TAK-asiakkaalla ei ole varmistettu ATAK-
 yhteyspakettia eikä CoT:n `<video>`-elementtiä (ks. [relay](docs/fi/relay.md#tunnetut-rajoitukset)).
 
 ## Lisenssi

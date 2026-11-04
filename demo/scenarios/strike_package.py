@@ -14,8 +14,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sender  # noqa: E402
 
 # ── Geographic constants ──────────────────────────────────────────────────────
-START     =(64.2255, 27.7357)
-TARGET    =(62.2415, 25.7209)
+START     = (64.2255, 27.7357)
+TARGET    = (62.2415, 25.7209)
 
 def _bearing(lat1, lon1, lat2, lon2):
     """Great-circle initial bearing in degrees (0=N, 90=E)."""

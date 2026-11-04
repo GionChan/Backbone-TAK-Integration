@@ -6,13 +6,13 @@
 relayta kohden:
 
 1. **Onko teillä TAK Server?** → `server`
-2. **Onko verkko suljettu ja vain teidän käytössänne** (esim. ajoneuvon Wi-Fi)? → `multicast`
+2. **Onko verkko suljettu ja vain teidän käytössänne?** → `multicast`
 3. **Muuten** → `direct` (oletus)
 
 | | `direct` (suora) | `multicast` (lähiverkko) | `server` (TAK Server) |
 | --- | --- | --- | --- |
-| **Kenelle** | Tämä kone tai muutama nimetty laite | Suljettu taktinen lähiverkko | Organisaatio, jolla on TAK Server |
-| **Mitä TAKiin asetetaan** | Yksi tuloportti: UDP 6969 (TAK app), 4242 (WinTAK) tai TCP 8087 | Ei mitään | Ei mitään, laitteet ovat jo serverillä |
+| **Kenelle** | Tämä kone tai muutama nimetty laite | Suljettu oma lähiverkko | Organisaatio, jolla on TAK Server |
+| **Mitä TAKiin asetetaan** | Yksi tuloportti: UDP 6969, 4242 (WinTAK) tai TCP 8087 | Ei mitään | Ei mitään, laitteet ovat jo serverillä |
 | **Kuka näkee backbonen** | Vain asetetut laitteet | **Kaikki samassa verkkosegmentissä** | Kaikki serverin käyttäjät |
 | **Kenen sijainti julkaistaan** (`TAK_INGEST=1`) | Paikalliset laitteet (tai `TAK_INGEST_UIDS`) | Vain `TAK_INGEST_UIDS`-listan uidit | Ei kenenkään oletuksena |
 | **Docker** | Kyllä | Vain Linuxin isäntäverkossa | Kyllä |

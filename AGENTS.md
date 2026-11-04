@@ -116,12 +116,13 @@ __version__, docker-compose image tag and the newest CHANGELOG section must agre
 - Docs exist in two languages with the same file names (docs/en/X.md <-> docs/fi/X.md); keep
   them in sync. Finnish follows Kielitoimisto rules.
 - tools/register_portal_topics.py --apply and anything publishing to the real fabric affect a
-  shared exercise network: do not run them without the user's explicit consent.
+  shared network: do not run them without the user's explicit consent.
+- Docs name no events, places or people. Vendor format names appear only in the
+  "Recognised formats" table of docs/*/relay.md.
 
 ## Unverified (do not claim otherwise)
 
 ATAK connection package format and CoT `<video>` element on a real TAK client. Edge-AI demo CoT
 is not exercise-labelled (README there says to set EDGE_COT_AFFIL=u).
 TAK_MODE=multicast with real TAK devices (tested only over loopback); TAK_MODE=server against a
-real TAK Server (tested against a local TLS server); the field-package installer on Windows
-(scripts are parse-checked in CI only).
+real TAK Server (tested against a local TLS server).

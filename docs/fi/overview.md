@@ -5,8 +5,8 @@
 ## Ongelma
 
 EFDI-kumppanit jakavat sensoridataa **goat-fabricin** kautta. Se on dataverkko, jossa jokainen
-organisaatio julkaisee omaan namespaceensa ja lukee muiden julkaisemaa dataa. Sotilaat ja
-operaattorit seuraavat tilannetta **TAK**-sovelluksissa (WinTAK, ATAK), jotka puhuvat
+organisaatio julkaisee omaan namespaceensa ja lukee muiden julkaisemaa dataa. Käyttäjät
+seuraavat tilannetta **TAK**-sovelluksissa (WinTAK, ATAK ja muut CoT-sovellukset), jotka puhuvat
 eri kieltä: Cursor on Target (CoT). Näiden väliin tarvitaan jotain, joka kääntää viestit ja
 pitää virheellisen datan poissa. Se on TAK-relay.
 
@@ -28,7 +28,7 @@ TAK-sovelluksille.
                          │ → rajoita → jaa    │
                          └──┬──────┬───────┬──┘
                  UDP 6969/4242   TCP 8087   RTSP 8554 (video)
-                    TAK app       ATAK        TAK "Play Video"
+                  UDP-sovellukset ATAK        TAK "Play Video"
                     WinTAK        WinTAK
 ```
 
@@ -45,8 +45,9 @@ Polun suojaa neljä kerrosta:
 
 ## Mitä relay tekee viestille
 
-1. **Tunnistaa** muodon: CoT-XML, `goat.geo.track.v1`, MAVLink, Consilium, HYMOTS, Orion,
-   ADS-B, protobuf-radat tai oma JSON-telemetria. Tuntemattomat muodot lasketaan ja ohitetaan.
+1. **Tunnistaa** muodon: CoT-XML, `goat.geo.track.v1`, MAVLink, ADS-B, protobuf-radat,
+   valmistajakohtaiset ratamuodot ([koko luettelo](relay.md#tunnistetut-muodot)) tai oma
+   JSON-telemetria. Tuntemattomat muodot lasketaan ja ohitetaan.
 2. **Muuntaa** viestin CoT-muotoon ja päättelee merkin tyypin (osapuoli ja ulottuvuus), jos
    lähde ei kerro sitä.
 3. **Tarkistaa:** XML on ehjää, DTD:tä ei ole, koordinaatit ovat sallitulla alueella, merkki ei

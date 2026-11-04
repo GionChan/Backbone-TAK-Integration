@@ -59,8 +59,8 @@ and its SHA256.
      scheduled tasks, it falls back to a shortcut in the Startup folder.
    - Kiosk machines with no logged-in user: `install.ps1 -AtSystemStartup` in an admin
      PowerShell (at system start, as SYSTEM).
-3. Direct mode only: point the terminal's CoT input at `device.env`'s `TAK_UDP_PORT` (TAK app
-   default 6969), and its UDP output at `TAK_UDP_IN_PORT` if PLI is wanted. Local-network and TAK
+3. Direct mode only: point the terminal's CoT input at `device.env`'s `TAK_UDP_PORT` (default
+   6969), and its UDP output at `TAK_UDP_IN_PORT` if PLI is wanted. Local-network and TAK
    Server modes need nothing in TAK.
 4. Open <http://localhost:8088/>: the status page should say **Healthy**. Logs: `logs/relay-YYYYMMDD.log`.
 

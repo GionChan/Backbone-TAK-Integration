@@ -30,7 +30,7 @@ The installer asks for:
 | Mode | For | What to set in TAK | Who sees the picture |
 | --- | --- | --- | --- |
 | 1 Direct | This machine or a few named devices | One input port (UDP {tak_udp_port} or TCP {tak_port}) | Only those devices |
-| 2 Local network | A closed network of your own, e.g. a vehicle Wi-Fi | Nothing | Everyone on the network |
+| 2 Local network | A closed network of your own | Nothing | Everyone on the network |
 | 3 TAK Server | An organisation with a TAK Server | Nothing | Every user on the server |
 
 3. **Details for the mode:** in TAK Server mode the server address, certificates and password.

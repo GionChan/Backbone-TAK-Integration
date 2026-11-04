@@ -5,8 +5,8 @@
 ## The problem
 
 EFDI partners share sensor data over the **goat fabric**: a data network where each organisation
-publishes under its own namespace and reads what others publish. Soldiers and operators look at
-the situation in **TAK** applications (WinTAK, ATAK), which speak a different language,
+publishes under its own namespace and reads what others publish. Users look at the situation in
+**TAK** applications (WinTAK, ATAK and other CoT clients), which speak a different language,
 Cursor on Target (CoT). Something has to sit between the two, translate, and keep bad data out.
 That is the TAK relay.
 
@@ -27,7 +27,7 @@ the boxes it cares about, rewrites each letter in CoT and hands it to the TAK cl
                          │ → rate-limit → fan │
                          └──┬──────┬───────┬──┘
                  UDP 6969/4242   TCP 8087   RTSP 8554 (video)
-                    TAK app       ATAK        TAK "Play Video"
+                    UDP clients   ATAK        TAK "Play Video"
                     WinTAK        WinTAK
 ```
 
@@ -44,8 +44,9 @@ Four layers make the path secure:
 
 ## What the relay does with a message
 
-1. **Recognise** the format: CoT XML, `goat.geo.track.v1`, MAVLink, Consilium, HYMOTS, Orion,
-   ADS-B, protobuf tracks, or your own JSON telemetry. Unknown formats are counted and skipped.
+1. **Recognise** the format: CoT XML, `goat.geo.track.v1`, MAVLink, ADS-B, protobuf tracks,
+   vendor-specific track formats ([full list](relay.md#recognised-formats)) or your own JSON
+   telemetry. Unknown formats are counted and skipped.
 2. **Convert** it to CoT, inferring the symbol (affiliation and dimension) when the source does
    not state it.
 3. **Validate**: well-formed XML, no DTD, coordinates in range, not already stale, under 64 KiB.

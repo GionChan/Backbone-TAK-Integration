@@ -5,11 +5,12 @@
 **Suomeksi:** [README.fi.md](README.fi.md) · **For AI agents:** [AGENTS.md](AGENTS.md)
 
 A two-way bridge between the **EFDI goat fabric** (Zenoh over mTLS on a NetBird mesh) and
-**TAK clients** (WinTAK, ATAK, TAK Server).
+**TAK clients** (WinTAK, ATAK, other CoT clients and TAK Server).
 
 - **Backbone → TAK.** Every recognisable position message on the backbone becomes a CoT marker:
-  ready-made CoT XML from any vendor, `goat.geo.track.v1`, MAVLink, Consilium, HYMOTS, Orion,
-  ADS-B, protobuf tracks and your own JSON telemetry. Messages are validated, rate-limited and
+  ready-made CoT XML, `goat.geo.track.v1`, MAVLink, ADS-B, protobuf tracks, several
+  vendor-specific track formats and your own JSON telemetry (full list in
+  [relay](docs/en/relay.md#recognised-formats)). Messages are validated, rate-limited and
   de-duplicated before they reach a client.
 - **TAK → backbone.** Optional: friendly position reports (PLI) from your own TAK users are
   published to the backbone.
@@ -50,7 +51,7 @@ Choose how TAK devices get the picture with `TAK_MODE` in `.env`: `direct` (defa
 (nothing to set in TAK, closed networks only) or `server` (feed a TAK Server). See
 [choose a mode](docs/en/modes.md). In `direct` mode, point your TAK client at the relay:
 
-- **TAK app:** UDP input 6969 on the Docker host (default target).
+- **TAK client with a UDP input:** port 6969 on the Docker host (default target).
 - **WinTAK:** add `host.docker.internal:4242` to `TAK_UDP_TARGETS` in `.env`.
 - **ATAK / WinTAK over TCP:** TAK Server → TCP streaming → `<relay-host>:8087`.
 - **A TAK Server:** set `TAK_SERVER` and its .p12 files in `.env`; every user on the server then
@@ -105,10 +106,9 @@ CI runs the unit tests on Windows and Linux for every push and pull request to `
 
 ## Status
 
-The relay path
-(install → healthy against the real fabric → CoT from several vendors → uninstall) has been
-verified on Windows field devices. Not verified on a real TAK client: the ATAK connection
-package and the CoT `<video>` element (see [relay](docs/en/relay.md#known-limitations)).
+The relay path (install → healthy against the real fabric → CoT from several vendors →
+uninstall) has been verified on Windows field devices. Not verified on a real TAK client: the
+ATAK connection package and the CoT `<video>` element (see [relay](docs/en/relay.md#known-limitations)).
 
 ## License
 

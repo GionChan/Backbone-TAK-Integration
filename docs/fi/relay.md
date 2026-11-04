@@ -50,7 +50,7 @@ useampia, aseta `GOAT_CERT_DIR`.
 | --- | --- | --- |
 | `GATEWAY_INGEST_ALL` | `0` natiivisti, `1` composessa | `1`: tilaa `**` ja muunna kaikki tunnistetut muodot. `0`: vain `GATEWAY_COT_KE` |
 | `GATEWAY_COT_KE` | `*/tak/cot/v1/**` | Minkä tahansa valmistajan valmis CoT (kun `GATEWAY_INGEST_ALL=0`) |
-| `GATEWAY_SOURCES` | kaikki | Osajoukko: `xml,geotrack,consilium,mavlink,hymots,orion,adsb,alerts,roi,proto` |
+| `GATEWAY_SOURCES` | kaikki | Osajoukko: `xml,geotrack,consilium,mavlink,hymots,orion,adsb,alerts,roi,proto` ([muodot](#tunnistetut-muodot)) |
 | `GATEWAY_HYMOTS_INTERVAL_S` | `10` | HYMOTS-jäljen lyhin päivitysväli |
 | `XV_MAX_HZ_PER_UID` | `2` | Tahtiraja uidia kohden `GATEWAY_COT_KE`-liikenteelle |
 | `COT_TYPE` | `a-h-A-M-F-Q` | CoT-varatyyppi |
@@ -59,6 +59,21 @@ Oma JSON-telemetria polussa `<slot>/sensor/v1/**` (`{source, lat, lon, alt, head
 speed_kmh, type, phase, lost}`) muunnetaan aina. `"lost": true` lähettää vanhentuneen merkin,
 jolloin TAK poistaa jäljen. Avaimia, joissa on `video`, `keyframe` tai `asterix-raw`, sekä
 heartbeateja ja relayn omaa PLI:tä ei koskaan muunneta.
+
+### Tunnistetut muodot
+
+| Lähde (`GATEWAY_SOURCES`) | Sisältö |
+| --- | --- |
+| `xml` | Valmis CoT-`<event>` millä tahansa avaimella, välitetään sellaisenaan tarkistuksen jälkeen |
+| `geotrack` | JSON, jonka skeema on `goat.geo.track.v1` |
+| `consilium` | Consilium-JSON: `ci_uuid`, `location.latitude/longitude` |
+| `mavlink` | MAVLink-JSON: `mavpackettype` `GLOBAL_POSITION_INT` |
+| `hymots` | HYMOTS-JSON: `agents[]`, joissa `location` ja `sidc` |
+| `orion` | Orion-JSON: `entityId`, `location.position` |
+| `adsb` | ADS-B-JSON: `kind` `uk-adsb-assessment`, `aircraft[]` |
+| `alerts` | Hälytys-JSON: `alert_text`, `event.locations[]` |
+| `roi` | Kiinnostava alue: `MAV_CMD_DO_SET_ROI_LOCATION` |
+| `proto` | Protobuf-radat |
 
 ## Ulostulot
 

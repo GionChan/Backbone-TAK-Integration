@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Demo
+
+- Scenarios renamed: `swarm_orbit.py` (compose service `swarm-orbit`), `strike_package.py`,
+  `mass_raid.csv`. The live map's scripted scenario names its targets A–E.
+
+### Documentation
+
+- References to events, dates and places removed.
+
 ## 1.1.0 — 2026-11-04
 
 ### Relay

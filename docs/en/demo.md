@@ -58,9 +58,9 @@ with sender.open_session("my-scenario") as s:
 .\demo\run-backbone-demo.ps1 -NoSwarm | -EdgeAI | -EdgeApi | -Stop
 ```
 
-The launcher checks the mesh, starts the relay with demo settings (CoT to TAK app 6969 and WinTAK
-4242, PLI ingest and video on), the demo profile, and the strike-package scenario natively. Logs go to
-`logs/`.
+The launcher checks the mesh, starts the relay with demo settings (CoT by UDP to 6969 and to
+WinTAK on 4242, PLI ingest and video on), the demo profile, and the strike-package scenario
+natively. Logs go to `logs/`.
 
 ### Any OS
 
@@ -80,7 +80,7 @@ fabric, without the heartbeat.
 - **Map:** <http://localhost:8080>. **Control panel:** `/control`: inject a single track, start
   a scripted scenario, or drag and drop a mission CSV/JSON (`demo/scenarios/mass_raid.csv`,
   example at `/example.csv`). Injected tracks go through the sender.
-- **TAK:** WinTAK takes CoT on UDP 4242, TAK app on 6969, ATAK by TCP `<host>:8087`.
+- **TAK:** WinTAK takes CoT on UDP 4242, other UDP clients on 6969, ATAK by TCP `<host>:8087`.
 - **Relay:** `http://localhost:8088/status` and `/streams`.
 - **Terminal:** `python demo/tools/live_monitor.py`.
 

@@ -49,7 +49,7 @@ found and exactly one such directory exists. With several, set `GOAT_CERT_DIR`.
 | --- | --- | --- |
 | `GATEWAY_INGEST_ALL` | `0` natively, `1` in compose | `1`: subscribe `**` and convert every recognised format. `0`: only `GATEWAY_COT_KE` |
 | `GATEWAY_COT_KE` | `*/tak/cot/v1/**` | Ready-made CoT from any vendor (when `GATEWAY_INGEST_ALL=0`) |
-| `GATEWAY_SOURCES` | all | Subset of `xml,geotrack,consilium,mavlink,hymots,orion,adsb,alerts,roi,proto` |
+| `GATEWAY_SOURCES` | all | Subset of `xml,geotrack,consilium,mavlink,hymots,orion,adsb,alerts,roi,proto` ([formats](#recognised-formats)) |
 | `GATEWAY_HYMOTS_INTERVAL_S` | `10` | Minimum interval per HYMOTS track |
 | `XV_MAX_HZ_PER_UID` | `2` | Rate limit per uid for `GATEWAY_COT_KE` traffic |
 | `COT_TYPE` | `a-h-A-M-F-Q` | Fallback CoT type |
@@ -58,6 +58,21 @@ Your own JSON telemetry on `<slot>/sensor/v1/**` (`{source, lat, lon, alt, headi
 type, phase, lost}`) is always converted. `"lost": true` sends an expired marker so TAK removes
 the track. Keys containing `video`, `keyframe` or `asterix-raw`, heartbeats and the relay's own
 PLI are never converted.
+
+### Recognised formats
+
+| Source (`GATEWAY_SOURCES`) | Payload |
+| --- | --- |
+| `xml` | Ready-made CoT `<event>` on any key, forwarded as is after validation |
+| `geotrack` | JSON with schema `goat.geo.track.v1` |
+| `consilium` | Consilium JSON: `ci_uuid`, `location.latitude/longitude` |
+| `mavlink` | MAVLink JSON: `mavpackettype` `GLOBAL_POSITION_INT` |
+| `hymots` | HYMOTS JSON: `agents[]` with `location` and `sidc` |
+| `orion` | Orion JSON: `entityId`, `location.position` |
+| `adsb` | ADS-B JSON: `kind` `uk-adsb-assessment`, `aircraft[]` |
+| `alerts` | Alert JSON: `alert_text`, `event.locations[]` |
+| `roi` | Region of interest: `MAV_CMD_DO_SET_ROI_LOCATION` |
+| `proto` | Protobuf tracks |
 
 ## Outputs
 

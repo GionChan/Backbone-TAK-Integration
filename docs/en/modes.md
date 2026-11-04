@@ -5,13 +5,13 @@
 `TAK_MODE` decides how TAK devices get the backbone picture. Pick one per relay:
 
 1. **Do you have a TAK Server?** → `server`
-2. **Is the network closed and only yours** (e.g. a vehicle Wi-Fi)? → `multicast`
+2. **Is the network closed and only yours?** → `multicast`
 3. **Otherwise** → `direct` (the default)
 
 | | `direct` | `multicast` | `server` |
 | --- | --- | --- | --- |
-| **For** | This machine or a few named devices | A closed tactical LAN | An organisation with a TAK Server |
-| **What to set in TAK** | One input port: UDP 6969 (TAK app), 4242 (WinTAK) or TCP 8087 | Nothing | Nothing; devices are already on the server |
+| **For** | This machine or a few named devices | A closed LAN of your own | An organisation with a TAK Server |
+| **What to set in TAK** | One input port: UDP 6969, 4242 (WinTAK) or TCP 8087 | Nothing | Nothing; devices are already on the server |
 | **Who sees the backbone** | Only those devices | **Everyone on the LAN segment** | Every user on the server |
 | **Whose position is published** (`TAK_INGEST=1`) | Local devices (or `TAK_INGEST_UIDS`) | Only uids in `TAK_INGEST_UIDS` | Nobody by default |
 | **Docker** | Yes | Linux host network only | Yes |

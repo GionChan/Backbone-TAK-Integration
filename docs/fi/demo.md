@@ -59,7 +59,7 @@ with sender.open_session("oma-skenaario") as s:
 .\demo\run-backbone-demo.ps1 -NoSwarm | -EdgeAI | -EdgeApi | -Stop
 ```
 
-Käynnistin tarkistaa meshin, käynnistää relayn demoasetuksilla (CoT TAK-sovellukselle porttiin 6969
+Käynnistin tarkistaa meshin, käynnistää relayn demoasetuksilla (CoT UDP:llä porttiin 6969
 ja WinTAKille porttiin 4242, PLI ja video päällä), demoprofiilin sekä iskuosastoskenaarion
 natiivisti. Lokit tallentuvat kansioon `logs/`.
 
@@ -82,8 +82,8 @@ mutta heartbeatia ei lähetetä.
   käynnistä valmis skenaario tai vedä ja pudota tehtävä-CSV tai -JSON
   (`demo/scenarios/mass_raid.csv`, esimerkki osoitteessa `/example.csv`). Syötetyt
   jäljet kulkevat lähettimen kautta.
-- **TAK:** WinTAK ottaa CoT:n vastaan UDP-portissa 4242, TAK app portissa 6969 ja ATAK TCP:llä
-  osoitteessa `<osoite>:8087`.
+- **TAK:** WinTAK ottaa CoT:n vastaan UDP-portissa 4242, muut UDP-sovellukset portissa 6969 ja
+  ATAK TCP:llä osoitteessa `<osoite>:8087`.
 - **Relay:** `http://localhost:8088/status` ja `/streams`.
 - **Pääte:** `python demo/tools/live_monitor.py`.
 

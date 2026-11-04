@@ -30,7 +30,7 @@ Asennin kysyy:
 | Tila | Kenelle | Mitä TAKiin asetetaan | Kuka näkee tilannekuvan |
 | --- | --- | --- | --- |
 | 1 Suora | Tämä kone tai muutama nimetty laite | Yksi tuloportti (UDP {tak_udp_port} tai TCP {tak_port}) | Vain asetetut laitteet |
-| 2 Lähiverkko | Suljettu oma verkko, esim. ajoneuvon Wi-Fi | Ei mitään | Kaikki samassa verkossa |
+| 2 Lähiverkko | Suljettu oma verkko | Ei mitään | Kaikki samassa verkossa |
 | 3 TAK Server | Organisaatio, jolla on TAK Server | Ei mitään | Kaikki serverin käyttäjät |
 
 3. **Tilan lisätiedot:** TAK Server -tilassa serverin osoitteen, varmenteet ja salasanan.

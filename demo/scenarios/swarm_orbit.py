@@ -24,7 +24,7 @@ _COUNT      = int(os.environ.get("DRONE_COUNT", "4"))
 _TICK       = 0.5      # seconds per update
 _RESET_SEC  = 600      # 10-minute cycle
 
-_TARGET     =(60.1699, 24.9384)
+_TARGET     = (60.1699, 24.9384)
 _ORBIT_CTR  = (60.28,   25.05)
 
 # deg/tick → m/s: speed_deg * 111000 / _TICK
