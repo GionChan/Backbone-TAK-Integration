@@ -9,8 +9,9 @@ Julkaisu on yksi git-tagi. `.github/workflows/release.yml` hoitaa loput.
 | Tuote | Missä | Sisältö |
 | --- | --- | --- |
 | Docker-image | `ghcr.io/<omistaja>/efdi-tak-relay:X.Y.Z`, `:X.Y`, `:latest` | Relay `linux/amd64`- ja `linux/arm64`-alustoille, mukana SBOM ja provenance |
-| Kenttäpaketin pohja | GitHub Release: `efdi-tak-relay-X.Y.Z-windows-x64.zip` | Asennin, relay ja Python. **Ei varmennetta, slotia eikä laitteen nimeä** |
-| Tarkisteet | GitHub Release: `SHA256SUMS` | ZIPin SHA256-tarkiste |
+| Kenttäpaketin pohja, Windows | GitHub Release: `efdi-tak-relay-X.Y.Z-windows-x64.zip` | Asennin, relay ja Python. **Ei varmennetta, slotia eikä laitteen nimeä** |
+| Kenttäpaketin pohja, Linux | GitHub Release: `efdi-tak-relay-X.Y.Z-linux.tar.gz` | Asennin, relay ja wheelit x86_64- ja aarch64-koneille. **Ei varmennetta, slotia eikä laitteen nimeä** |
+| Tarkisteet | GitHub Release: `SHA256SUMS` | Molempien pohjien SHA256-tarkisteet |
 
 Pohjan voi jakaa turvallisesti: `install.cmd` kysyy EFDI-varmennepaketin (kansio, `.zip` tai
 `.tar.gz`; se ehdottaa Lataukset-kansion `efdi-onboarding*`-tiedostoa) ja laitteen nimen.
@@ -37,15 +38,17 @@ luku ja composen image-tagi eivät täsmää.
 1. Versiot täsmäävät (`tools/check_release.py`).
 2. Image rakentuu amd64- ja arm64-alustoille, ja kummallakin käynnistyvät Python kaikkine
    riippuvuuksineen, MediaMTX ja `doctor.py` (arm64 QEMU:lla).
-3. Pohjassa ei ole `.pem`-, `.key`-, `.p12`- eikä `.cbor`-tiedostoja eikä slotia, laitteen nimeä
+3. Kummassakaan pohjassa ei ole `.pem`-, `.key`-, `.p12`- eikä `.cbor`-tiedostoja eikä slotia, laitteen nimeä
    tai TAK Server -asetuksia.
 4. Täsmälleen julkaistava ZIP asennetaan Windowsiin niin, että jokainen Python on piilotettu
    `PATH`-polusta: varmenne `.zip`-tiedostosta, laitteen nimi kirjoitetaan, relay käy paketin
    omalla Pythonilla ja poistetaan lopuksi.
+5. Täsmälleen julkaistava Linux-pohja asennetaan Ubuntuun niin, ettei pakettirekisteriin ole
+   yhteyttä: varmenne `.tar.gz`-tiedostosta, laitteen nimi kirjoitetaan, relay käy ja poistetaan.
 
 Image rakennetaan kerran OCI-arkistoksi. Tarkistus 2 ja julkaisu käyttävät samaa arkistoa, joten
 julkaistu image on juuri testattu image. Image ja GitHub Release julkaistaan vasta, kun kaikki
-neljä tarkistusta ovat menneet läpi, joten epäonnistunut tarkistus ei jätä mitään julkaistuksi.
+viisi tarkistusta ovat menneet läpi, joten epäonnistunut tarkistus ei jätä mitään julkaistuksi.
 Puskut `feature/**`-haaroihin ajavat kaiken tämän kuivaharjoituksena julkaisematta mitään.
 
 ## Laitekohtaiset paketit

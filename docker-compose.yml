@@ -24,6 +24,8 @@ x-fabric: &fabric
     # EFDI_ROUTER_HOST = the router name from certs/NOTES.md, EFDI_ROUTER_IP = nslookup of that
     # name on the host while NetBird is up. Unset, this maps a placeholder name and does nothing.
     - "${EFDI_ROUTER_HOST:-router.invalid}:${EFDI_ROUTER_IP:-127.0.0.1}"
+    # The Docker host for TAK_UDP_TARGETS. Docker Desktop defines it; Docker Engine on Linux needs this.
+    - "host.docker.internal:host-gateway"
 
 services:
 
@@ -31,7 +33,7 @@ services:
   tak-relay:
     <<: *fabric
     build: {context: ., target: relay}
-    image: efdi-tak-relay:1.1.4
+    image: efdi-tak-relay:1.2.0
     environment:
       <<: *fabric-env
       GATEWAY_SYSTEM: ${GATEWAY_SYSTEM:-tak-gateway}
@@ -49,6 +51,8 @@ services:
       TAK_INGEST: ${TAK_INGEST:-0}
       TAK_INGEST_FROM: ${TAK_INGEST_FROM:-}
       TAK_INGEST_UIDS: ${TAK_INGEST_UIDS:-}
+      # 1 = markers and drawings made on those devices to <org>/tak/cot/v1/<uid>. Messages never.
+      TAK_SHARE_MARKERS: ${TAK_SHARE_MARKERS:-0}
       TAK_UDP_IN_PORT: "6971"
       # HTTP port on all container interfaces, so the 127.0.0.1-only port mapping below reaches it.
       GATEWAY_HTTP_BIND: 0.0.0.0

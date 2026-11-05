@@ -11,7 +11,7 @@ docker compose --profile demo build tak-relay zenoh-router
 docker compose --profile demo up -d zenoh-router tak-relay
 
 cid=$(docker compose ps -q tak-relay)
-for i in $(seq 1 60); do
+for _ in $(seq 1 60); do
   state=$(docker inspect -f '{{.State.Health.Status}}' "$cid")
   echo "health: $state"
   [ "$state" = "healthy" ] && break

@@ -12,8 +12,9 @@ A two-way bridge between the **EFDI goat fabric** (Zenoh over mTLS on a NetBird 
   vendor-specific track formats and your own JSON telemetry (full list in
   [relay](docs/en/relay.md#recognised-formats)). Messages are validated, rate-limited and
   de-duplicated before they reach a client.
-- **TAK → backbone.** Optional: friendly position reports (PLI) from your own TAK users are
-  published to the backbone.
+- **TAK → backbone.** Optional, each with its own switch: friendly position reports (PLI) from
+  your own TAK users, and the markers and drawings they make. Messages (GeoChat) never leave the
+  TAK network.
 - **Operations.** Mandatory fabric heartbeat, `/healthz`, Prometheus `/metrics`, `/status`, a
   `/streams` view of live backbone traffic, a watchdog that restarts the relay when the link or
   the feed dies, and an optional video restream (RTSP) to TAK.
@@ -57,11 +58,12 @@ Choose how TAK devices get the picture with `TAK_MODE` in `.env`: `direct` (defa
 - **A TAK Server:** set `TAK_SERVER` and its .p12 files in `.env`; every user on the server then
   sees the backbone. See [relay: TAK Server](docs/en/relay.md#tak-server).
 
-Only your own devices' positions go to the backbone, and only with `TAK_INGEST=1`; TAK Server
-users never do.
+Only your own devices go to the backbone: positions with `TAK_INGEST=1`, markers and drawings
+with `TAK_SHARE_MARKERS=1`. TAK Server users never do.
 
 Field devices without Docker: build a self-installing package with
-`python tools/make_relay_package.py --system <name>`; see [field package](docs/en/field-package.md).
+`python tools/make_relay_package.py --system <name>` (Windows) or add `--platform linux` (Linux,
+systemd); see [field package](docs/en/field-package.md).
 
 ## Quick start: the demo
 
@@ -87,7 +89,7 @@ certificates everything runs against the local router, offline. See the [demo gu
 | Choose a mode: direct, local network (multicast) or TAK Server | [modes](docs/en/modes.md) | [tilat](docs/fi/modes.md) |
 | Relay: configuration, topics, operations, security | [relay](docs/en/relay.md) | [relay](docs/fi/relay.md) |
 | Demo: scenarios, sender, viewers | [demo](docs/en/demo.md) | [demo](docs/fi/demo.md) |
-| Field-device package (Windows, no Docker) | [field package](docs/en/field-package.md) | [kenttäpaketti](docs/fi/field-package.md) |
+| Field-device package (Windows and Linux, no Docker) | [field package](docs/en/field-package.md) | [kenttäpaketti](docs/fi/field-package.md) |
 | Releasing: image, field-package template | [release](docs/en/release.md) | [julkaisu](docs/fi/release.md) |
 | Troubleshooting | [troubleshooting](docs/en/troubleshooting.md) | [vianetsintä](docs/fi/troubleshooting.md) |
 | Interface spec | [`docs/asyncapi-tak-gateway.yaml`](docs/asyncapi-tak-gateway.yaml) | |

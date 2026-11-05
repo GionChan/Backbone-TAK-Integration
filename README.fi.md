@@ -12,7 +12,9 @@ Kaksisuuntainen silta **EFDI goat -fabricin** (Zenoh, mTLS, NetBird-mesh) ja
   ratamuodot ja oma JSON-telemetria (koko luettelo: [relay](docs/fi/relay.md#tunnistetut-muodot)).
   Viestit tarkistetaan, niiden tahtia rajoitetaan ja
   kaksoiskappaleet poistetaan ennen kuin ne lähetetään asiakkaalle.
-- **TAK → backbone.** Valinnaisesti omien TAK-käyttäjien sijainnit (PLI) julkaistaan backboneen.
+- **TAK → backbone.** Valinnaisesti, kumpikin omalla kytkimellään: omien TAK-käyttäjien sijainnit
+  (PLI) sekä heidän tekemänsä merkit ja piirrokset. Viestit (GeoChat) eivät koskaan lähde
+  TAK-verkosta.
 - **Operointi.** Pakollinen heartbeat, `/healthz`, Prometheus-mittarit (`/metrics`), `/status`,
   `/streams`-näkymä backbonen liikenteeseen, watchdog, joka käynnistää relayn uudelleen yhteyden
   tai datan katketessa, sekä valinnainen videon uudelleenlähetys (RTSP) TAKiin.
@@ -56,11 +58,12 @@ TAK Serveriä). Ks. [tilan valinta](docs/fi/modes.md). `direct`-tilassa ohjaa TA
 - **TAK Server:** aseta `.env`-tiedostoon `TAK_SERVER` ja sen .p12-tiedostot. Silloin jokainen
   serverin käyttäjä näkee backbonen. Ks. [relay: TAK Server](docs/fi/relay.md#tak-server).
 
-Backboneen menevät vain omien laitteiden sijainnit ja vain, kun `TAK_INGEST=1`. TAK Serverin
-käyttäjien sijainteja ei julkaista koskaan.
+Backboneen menevät vain omat laitteet: sijainnit, kun `TAK_INGEST=1`, sekä merkit ja piirrokset,
+kun `TAK_SHARE_MARKERS=1`. TAK Serverin käyttäjiä ei julkaista koskaan.
 
 Kenttälaitteet ilman Dockeria: itseasentuva paketti komennolla
-`python tools/make_relay_package.py --system <nimi>`, ks. [kenttäpaketti](docs/fi/field-package.md).
+`python tools/make_relay_package.py --system <nimi>` (Windows) tai lisäksi `--platform linux`
+(Linux, systemd), ks. [kenttäpaketti](docs/fi/field-package.md).
 
 ## Pikaohje: demo
 
@@ -87,7 +90,7 @@ sertifikaatteja kaikki toimii paikallista reititintä vasten ilman verkkoyhteytt
 | Tilan valinta: suora, lähiverkko (multicast) tai TAK Server | [tilat](docs/fi/modes.md) | [modes](docs/en/modes.md) |
 | Relay: asetukset, topicit, operointi, tietoturva | [relay](docs/fi/relay.md) | [relay](docs/en/relay.md) |
 | Demo: skenaariot, lähetin, näkymät | [demo](docs/fi/demo.md) | [demo](docs/en/demo.md) |
-| Kenttälaitepaketti (Windows, ei Dockeria) | [kenttäpaketti](docs/fi/field-package.md) | [field package](docs/en/field-package.md) |
+| Kenttälaitepaketti (Windows ja Linux, ei Dockeria) | [kenttäpaketti](docs/fi/field-package.md) | [field package](docs/en/field-package.md) |
 | Julkaiseminen: image, kenttäpaketin pohja | [julkaisu](docs/fi/release.md) | [release](docs/en/release.md) |
 | Vianetsintä | [vianetsintä](docs/fi/troubleshooting.md) | [troubleshooting](docs/en/troubleshooting.md) |
 | Rajapintakuvaus | [`docs/asyncapi-tak-gateway.yaml`](docs/asyncapi-tak-gateway.yaml) | |

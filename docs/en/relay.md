@@ -132,38 +132,56 @@ relay reconnects.
 Do not feed the same devices both directly (UDP/`:8087`) and through the TAK Server: they would
 get every marker twice. Choose one path per device.
 
-## TAK → backbone (PLI)
+## TAK → backbone (PLI, markers and drawings)
+
+Two switches, both off by default because they write to the shared backbone:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TAK_INGEST` | `0` | `1`: publish friendly CoT to `<slot>/tak/pli/v1/<uid>` |
-| `TAK_INGEST_TYPES` | `a-f-` | Comma-separated type prefixes accepted |
+| `TAK_INGEST` | `0` | `1`: a device's own position (friendly PLI) to `<slot>/tak/pli/v1/<uid>` |
+| `TAK_SHARE_MARKERS` | `0` | `1`: markers and drawings made on the devices to `<slot>/tak/cot/v1/<uid>` |
+| `TAK_INGEST_TYPES` | `a-f-` | PLI only: comma-separated type prefixes accepted |
 | `TAK_INGEST_FROM` | `local` (`multicast` mode: `local,lan`) | Which links may publish: `local` (UDP input, clients on `:8087`), `lan` (multicast group, only with `TAK_INGEST_UIDS`), `server` (TAK Server link). Comma-separated |
-| `TAK_INGEST_UIDS` | empty | Comma-separated uids allowed to publish (e.g. `ANDROID-abc123`). Empty = only TAK apps on this machine (loopback) |
+| `TAK_INGEST_UIDS` | empty | Comma-separated device uids allowed to publish (e.g. `ANDROID-abc123`). Empty = only TAK apps on this machine (loopback); `*` = any device on the allowed links |
 | `TAK_UDP_IN_PORT` | `0` (compose: `6971`) | UDP port for CoT from TAK clients (their UDP output) |
 
-Events from TCP clients connected to `:8087` are read as well. At most 1 Hz per uid; tasking
-(`t-*`) and non-friendly types are never published. This writes to the shared backbone, so it is
-off by default.
+Events from TCP clients connected to `:8087` are read as well.
+
+**PLI.** At most 1 Hz per uid; tasking (`t-*`) and non-friendly types are never published as PLI.
+
+**Markers and drawings** (`TAK_SHARE_MARKERS=1`). A marker or a drawing is a CoT event with a
+`<link relation="p-p">` to the device that made it; every such event is shared, hostile markers too
+(`a-h-*`, `b-m-p-*`, `u-d-*` and the rest). The allowlist applies to that device. A deletion
+(`t-x-d-d`) is published for markers this relay published, so the marker disappears from the other
+TAK devices as well; other deletions stay on the TAK network. At most 1 Hz per marker.
+Other organisations' relays already forward `*/tak/cot/v1/**` to their TAK clients.
+
+**Messages are never shared.** GeoChat and every other `b-t-*` event stays on the TAK network,
+whatever the settings (`reason="chat"`).
 
 Only your own devices are published:
 
 - **TAK Server users stay on the TAK Server.** A `tcp_client` link carries every user on that
   server. Its events go to TAK only, never to the backbone, unless `TAK_INGEST_FROM=local,server`.
 - **This machine only, unless listed.** Without `TAK_INGEST_UIDS` only events from this machine
-  (127.0.0.1) are published. Anyone else on the network could otherwise put positions on the
-  backbone under your slot. To publish a device on another machine, list its uid.
-- **Allowlist.** With `TAK_INGEST_UIDS` set, only those uids are published, even if a terminal
-  forwards other users' positions. A uid is what the device says it is, so the list limits
+  (127.0.0.1) are published. Anyone else on the network could otherwise publish under your slot.
+  To publish devices on other machines, list their uids, or set `*` for every device on the
+  network.
+- **Allowlist.** With `TAK_INGEST_UIDS` set, only those devices are published, even if a terminal
+  forwards other users' events. A uid is what the device says it is, so the list limits
   mistakes, not a deliberate forger: keep ports 6971 and 8087 off untrusted networks.
-- **No echo.** A uid the relay itself sent to TAK in the last 60 s is not published back.
+- **No echo.** An event the relay itself sent to TAK carries its tag, or was sent in the last
+  60 s; it is not published back.
 
-In Docker, packets from the host do not come from 127.0.0.1, so `TAK_INGEST=1` there needs
+In Docker, packets from the host do not come from 127.0.0.1, so publishing there needs
 `TAK_INGEST_UIDS`.
 
-Drops are counted in `gateway_ingest_dropped_total{reason="not-local"|"not-loopback"|"not-allowed"|"echo"|"relayed"}` (`relayed`: the
-event carries another relay's tag, see [modes](modes.md#in-every-mode));
-`/status` shows `ingest_from` and `ingest_uids`.
+Drops are counted in `gateway_ingest_dropped_total{reason=...}`: `not-local`, `not-loopback`,
+`not-allowed`, `echo`, `relayed` (the event carries another relay's tag, see
+[modes](modes.md#in-every-mode)), `chat`, `markers-off`, `pli-off`, `delete-unknown`. Published
+markers count in `gateway_markers_published_total` and their deletions in
+`gateway_marker_deletes_published_total`. `/status` shows `ingest_from`, `ingest_uids` and
+`share_markers`.
 
 ## Heartbeat and health
 
@@ -223,6 +241,11 @@ Docker image.
 
 ## Known limitations
 
+- Sharing markers and drawings is written from how ATAK and WinTAK mark the creator
+  (`<link relation="p-p">`) and send deletions (`t-x-d-d`), and is tested with such events, not
+  yet with real TAK devices. A marker without a creator link is treated as a PLI. The relay
+  remembers the markers it published in memory only: after a restart, a deletion is published
+  once the marker has been changed and shared again.
 - The ATAK connection package (`make_atak_package.py`) and the CoT `<video>` element are written
   from TAK documentation and not yet verified on a real TAK client. The MediaMTX pipeline itself
   is verified end to end.

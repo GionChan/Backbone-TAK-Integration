@@ -45,6 +45,7 @@ async function tick(){
   ["Fabric",g.gateway_fabric_up?"connected":"down",g.gateway_fabric_up?"y":"n"],
   ["Last backbone data",age<0?"none yet":age+" s ago"],
   ["PLI to backbone",s.ingest?("on, from "+(s.ingest_from||[]).join(", ")+(s.ingest_uids&&s.ingest_uids.length?", devices "+s.ingest_uids.join(", "):", this machine only")):"off"],
+  ["Markers and drawings to backbone",s.share_markers?"on":"off"],
   ["Uptime",Math.round((g.gateway_uptime_seconds||0)/60)+" min"]]);
  rows("outputs",(s.outputs||[]).map(o=>[o.name,(o.connected?"connected":"not connected")+(o.clients!==undefined?" · "+o.clients+" client(s)":"")+(o.queued?" · "+o.queued+" queued":""),o.connected?"y":"n"]));
  rows("traffic",[["Messages in",String(sum(c,"gateway_cot_in_total"))],["Sent to TAK",String(sum(c,"gateway_output_sent_total"))],

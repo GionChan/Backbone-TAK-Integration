@@ -1,0 +1,156 @@
+# Messages of the Linux field package: <lang>|<key>|<text>. %s = a value, \n = a new line.
+# Read by T() in common.sh. Every key exists in both fi and en (tests/test_make_relay_package.py).
+fi|no_python|Python 3.10:tä tai uudempaa (python3) ei löydy. Asenna se (esim. sudo apt install python3 python3-venv) ja yritä uudelleen.
+fi|no_venv|Python-ympäristön luonti epäonnistui. Asenna venv-moduuli (esim. sudo apt install python3-venv) ja yritä uudelleen.
+fi|venv|==> Luodaan Python-ympäristö...
+fi|deps|==> Asennetaan riippuvuudet (%s)...
+fi|deps_offline|==> Asennetaan riippuvuudet paketista (verkkoyhteyttä ei tarvita)...
+fi|pip_failed|Riippuvuuksien asennus epäonnistui. Tarkista verkkoyhteys ja yritä uudelleen.
+fi|no_env|device.env puuttuu, joten paketti on rikki. Tee paketti uudelleen (tools/make_relay_package.py).
+fi|starting|[%s] Käynnistetään relay, loki: %s
+fi|stopped|[%s] Relay pysähtyi (koodi %s). Uusi käynnistys 10 sekunnin kuluttua (Ctrl-C lopettaa).
+fi|title|==> EFDI TAK -relay: asennus
+fi|no_root|Aja asennin sillä käyttäjällä, joka ajaa relayta, älä pääkäyttäjänä. Valinnalla --at-boot asennin pyytää sudo-oikeutta vain palvelun asentamiseen.
+fi|choice|Valinta
+fi|invalid|Virheellinen valinta, yritä uudelleen.
+fi|too_many_tries|Liian monta virheellistä vastausta. Asennus keskeytettiin.
+fi|bundle_title|EFDI-varmennepakettia ei löytynyt tästä kansiosta.
+fi|bundle_prompt|Varmennepaketin polku (kansio, .zip tai .tar.gz)
+fi|bundle_bad|Polusta ei löytynyt yhtä varmennetta ja avainta (<slot>-cert.pem, <slot>-key.pem): %s
+fi|bundle_copied|==> Varmenne kopioitu: %s
+fi|bundle_no_notes|Varmennepaketissa ei ole NOTES.md-tiedostoa, joten reititintä ei tiedetä. Aseta device.env-tiedostoon GOAT_ROUTER=tls/<reititin>:<portti>.
+fi|system_note|Laitteen nimi näkyy EFDI-portaalissa, ja se pitää rekisteröidä portaaliin.
+fi|system_prompt|Laitteen nimi (pienet kirjaimet, numerot ja väliviivat)
+fi|system_bad|Nimessä saa olla 3–63 merkkiä: pieniä kirjaimia, numeroita ja väliviivoja.
+fi|mode_title|Miten TAK-laitteet saavat backbonen tilannekuvan?
+fi|mode_1|  1) Suora        CoT nimettyihin TAK-laitteisiin UDP:llä, ja ATAK tai WinTAK voi yhdistää TCP:llä.
+fi|mode_2|  2) Lähiverkko   Kaikki saman lähiverkon TAK-laitteet saavat tilannekuvan ilman asetuksia.\n                  Vain suljettuun omaan verkkoon: tilannekuva näkyy kaikille verkossa oleville.
+fi|mode_3|  3) TAK Server   Relay syöttää organisaation TAK Serveriä, ja kaikki serverin käyttäjät näkevät tilannekuvan.
+fi|mode_direct|suora
+fi|mode_multicast|lähiverkko
+fi|mode_server|TAK Server
+fi|mode_set|==> Tila: %s
+fi|udp_targets|Minne CoT lähetetään UDP:llä (osoite:portti, useita pilkulla erotettuina, Enter = tämä kone 127.0.0.1:6969)
+fi|direct_uids|Toisten laitteiden uidit, joiden oman sijainnin saa julkaista backboneen (pilkulla erotettuina, Enter = vain tämän koneen TAK-sovellukset)
+fi|srv_hint|Tarvitset TAK Serverin ylläpitäjältä relaylle asiakasvarmenteen (.p12) ja truststoren (.p12). Voit kopioida ne kansioon certs/tak/.
+fi|srv_address|TAK Serverin osoite (esim. tak.example.org tai tak.example.org:8089)
+fi|srv_p12|Relayn asiakasvarmenne (.p12)
+fi|srv_trust|TAK Serverin truststore (.p12)
+fi|srv_password|Varmenteen salasana
+fi|srv_missing_file|Tiedostoa ei löydy: %s
+fi|mc_warning|Huom: lähiverkkotilassa backbonen tilannekuva näkyy kaikille samassa verkossa oleville.
+fi|mc_uids|Laitteet, joiden oman sijainnin saa julkaista backboneen (uidit pilkulla erotettuina, Enter = ei yhdenkään)
+fi|share_title|Jaetaanko näiden TAK-laitteiden merkit ja piirrokset backboneen?
+fi|share_1|  1) Ei      Merkit ja piirrokset pysyvät TAK-verkossa.
+fi|share_2|  2) Kyllä   Kaikki CoT-merkit ja piirrokset, myös vihollismerkit, näkyvät muille organisaatioille. Viestejä ei jaeta koskaan.
+fi|share_set_0|==> Merkkien ja piirrosten jako: pois päältä
+fi|share_set_1|==> Merkkien ja piirrosten jako: päällä
+fi|deps_ok|==> Riippuvuudet kunnossa.
+fi|perms|==> Varmenteet ja device.env vain tämän käyttäjän luettaviksi.
+fi|svc_user|==> Asennetaan käyttäjän systemd-palvelu, joka käynnistyy, kun kirjaudut sisään...
+fi|svc_system|==> Asennetaan systemd-palvelu, joka käynnistyy koneen mukana käyttäjänä %s (vaatii sudo-oikeuden)...
+fi|svc_failed|systemd-palvelun asennus epäonnistui.
+fi|cron_fallback|==> systemd-käyttäjäpalvelua ei voi käyttää. Käytetään crontabin @reboot-riviä (käynnistyy koneen mukana).
+fi|no_autostart|Automaattista käynnistystä ei voitu asentaa (ei systemd:tä eikä crontabia). Käynnistä relay itse: ./run.sh
+fi|starting_now|==> Käynnistetään relay nyt...
+fi|waiting|==> Odotetaan relayn käynnistymistä...
+fi|healthy|==> Relay on käynnissä ja kunnossa.
+fi|not_healthy|==> Relay käynnistyi, mutta ei ole vielä kunnossa: %s
+fi|not_healthy_hint|    Tavallisin syy on puuttuva NetBird-yhteys. Tarkista komennolla 'netbird status'.
+fi|no_answer|==> Relay ei vielä vastaa portissa %s. Ensimmäinen käynnistys voi kestää hetken.
+fi|install_done|Asennus valmis.
+fi|autostart_user|Automaattinen käynnistys: käyttäjän systemd-palvelu %s (kirjautuessa).
+fi|autostart_system|Automaattinen käynnistys: systemd-palvelu %s (koneen käynnistyessä).
+fi|autostart_cron|Automaattinen käynnistys: crontabin @reboot-rivi.
+fi|restart_note|Relay käynnistyy itse uudelleen, jos se kaatuu tai yhteys katkeaa pitkäksi aikaa.
+fi|next_title|Seuraavaksi TAK-laitteisiin:
+fi|next_direct|  UDP: CoT lähtee osoitteisiin %s. ATAK tai WinTAK: TCP-yhteys tämän koneen osoitteeseen, portti %s.
+fi|next_direct_pli|  Oman sijainnin lähetys backboneen: TAK-sovelluksen UDP-lähtö tämän koneen porttiin %s.
+fi|next_multicast|  Ei asetettavaa. Tilannekuva tulee TAKin oletusosoitteeseen (SA multicast %s).
+fi|next_server|  Ei asetettavaa. Laitteet saavat tilannekuvan TAK Serveriltä.
+fi|firewall_hint|Palomuuri (esim. ufw) voi estää muiden laitteiden yhteydet: avaa tarvittaessa TCP %s ja UDP %s.
+fi|status_page|Tilasivu:     %s
+fi|doctor_hint|Vianetsintä:  ./run.sh --check-only
+fi|uninstall_hint|Poisto:       ./uninstall.sh
+fi|svc_removed|systemd-palvelu %s poistettu.
+fi|svc_system_sudo|Koneen mukana käynnistyvä palvelu %s on asennettu. Sen poistoon tarvitaan sudo-oikeus.
+fi|cron_removed|crontabin @reboot-rivi poistettu.
+fi|stopping|Pysäytetään relay (PID %s)...
+fi|uninstall_done|Poisto valmis. Kansio jätettiin paikalleen; poista se itse, jos et tarvitse sitä.
+en|no_python|Python 3.10 or newer (python3) not found. Install it (e.g. sudo apt install python3 python3-venv) and try again.
+en|no_venv|Creating the Python environment failed. Install the venv module (e.g. sudo apt install python3-venv) and try again.
+en|venv|==> Creating the Python environment...
+en|deps|==> Installing dependencies (%s)...
+en|deps_offline|==> Installing dependencies from the package (no network needed)...
+en|pip_failed|Installing the dependencies failed. Check the network connection and try again.
+en|no_env|device.env is missing, so the package is broken. Build the package again (tools/make_relay_package.py).
+en|starting|[%s] Starting the relay, log: %s
+en|stopped|[%s] The relay stopped (code %s). Restarting in 10 seconds (Ctrl-C stops).
+en|title|==> EFDI TAK relay: installation
+en|no_root|Run the installer as the user who will run the relay, not as root. With --at-boot it asks for sudo only to install the service.
+en|choice|Choice
+en|invalid|Invalid choice, try again.
+en|too_many_tries|Too many invalid answers. Installation stopped.
+en|bundle_title|No EFDI certificate bundle found in this folder.
+en|bundle_prompt|Path to the certificate bundle (folder, .zip or .tar.gz)
+en|bundle_bad|No single certificate and key (<slot>-cert.pem, <slot>-key.pem) found at: %s
+en|bundle_copied|==> Certificate copied: %s
+en|bundle_no_notes|The bundle has no NOTES.md, so the router is not known. Set GOAT_ROUTER=tls/<router>:<port> in device.env.
+en|system_note|The device name is shown in the EFDI portal and must be registered there.
+en|system_prompt|Device name (lower-case letters, digits and hyphens)
+en|system_bad|The name must be 3-63 characters: lower-case letters, digits and hyphens.
+en|mode_title|How do the TAK devices get the backbone picture?
+en|mode_1|  1) Direct       CoT to named TAK devices by UDP, and ATAK or WinTAK can connect over TCP.
+en|mode_2|  2) Local network Every TAK device on the same LAN gets the picture without any settings.\n                  Only on a closed network of your own: everyone on the network sees the picture.
+en|mode_3|  3) TAK Server   The relay feeds your organisation's TAK Server, and every user on it sees the picture.
+en|mode_direct|direct
+en|mode_multicast|local network
+en|mode_server|TAK Server
+en|mode_set|==> Mode: %s
+en|udp_targets|Where CoT goes by UDP (host:port, several comma-separated, Enter = this machine 127.0.0.1:6969)
+en|direct_uids|Uids of other devices whose own position may be published to the backbone (comma-separated, Enter = only TAK apps on this machine)
+en|srv_hint|Ask the TAK Server administrator for a client certificate (.p12) and a truststore (.p12) for the relay. You can copy them to certs/tak/.
+en|srv_address|TAK Server address (e.g. tak.example.org or tak.example.org:8089)
+en|srv_p12|Relay client certificate (.p12)
+en|srv_trust|TAK Server truststore (.p12)
+en|srv_password|Certificate password
+en|srv_missing_file|File not found: %s
+en|mc_warning|Note: in local-network mode everyone on the same network sees the backbone picture.
+en|mc_uids|Devices whose own position may be published to the backbone (uids, comma-separated, Enter = none)
+en|share_title|Share the markers and drawings of these TAK devices to the backbone?
+en|share_1|  1) No      Markers and drawings stay on the TAK network.
+en|share_2|  2) Yes     Every CoT marker and drawing, hostile ones too, is shown to other organisations. Messages are never shared.
+en|share_set_0|==> Sharing markers and drawings: off
+en|share_set_1|==> Sharing markers and drawings: on
+en|deps_ok|==> Dependencies ready.
+en|perms|==> Certificates and device.env readable by this user only.
+en|svc_user|==> Installing a systemd user service that starts when you sign in...
+en|svc_system|==> Installing a systemd service that starts with the machine, as user %s (needs sudo)...
+en|svc_failed|Installing the systemd service failed.
+en|cron_fallback|==> A systemd user service cannot be used. Using an @reboot line in crontab (starts with the machine).
+en|no_autostart|Automatic start could not be installed (no systemd and no crontab). Start the relay yourself: ./run.sh
+en|starting_now|==> Starting the relay now...
+en|waiting|==> Waiting for the relay to start...
+en|healthy|==> The relay is running and healthy.
+en|not_healthy|==> The relay started but is not healthy yet: %s
+en|not_healthy_hint|    The usual cause is a missing NetBird connection. Check with 'netbird status'.
+en|no_answer|==> The relay does not answer on port %s yet. The first start can take a moment.
+en|install_done|Installation complete.
+en|autostart_user|Automatic start: systemd user service %s (at sign-in).
+en|autostart_system|Automatic start: systemd service %s (when the machine starts).
+en|autostart_cron|Automatic start: @reboot line in crontab.
+en|restart_note|The relay restarts by itself if it crashes or the connection is lost for a long time.
+en|next_title|Next, on the TAK devices:
+en|next_direct|  UDP: CoT goes to %s. ATAK or WinTAK: a TCP connection to this machine's address, port %s.
+en|next_direct_pli|  To send your own position to the backbone: the TAK app's UDP output to this machine, port %s.
+en|next_multicast|  Nothing to set. The picture arrives on TAK's default address (SA multicast %s).
+en|next_server|  Nothing to set. Devices get the picture from the TAK Server.
+en|firewall_hint|A firewall (e.g. ufw) can block other devices: open TCP %s and UDP %s if needed.
+en|status_page|Status page:      %s
+en|doctor_hint|Troubleshooting:  ./run.sh --check-only
+en|uninstall_hint|Uninstall:        ./uninstall.sh
+en|svc_removed|systemd service %s removed.
+en|svc_system_sudo|The service %s that starts with the machine is installed. Removing it needs sudo.
+en|cron_removed|crontab @reboot line removed.
+en|stopping|Stopping the relay (PID %s)...
+en|uninstall_done|Uninstall complete. The folder was left in place; delete it yourself if you no longer need it.

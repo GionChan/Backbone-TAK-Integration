@@ -35,6 +35,8 @@ The installer asks for:
 
 3. **Details for the mode:** in TAK Server mode the server address, certificates and password.
    In local-network mode the devices whose own position may be published to the backbone.
+4. **Sharing markers and drawings:** off, or on (every CoT marker and drawing, hostile ones
+   too, goes to the backbone; messages never).
 
 Finally the installer starts the relay, checks its status and tells you what to set in the TAK
 app. The choices are saved in `device.env`.

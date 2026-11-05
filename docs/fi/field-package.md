@@ -1,4 +1,4 @@
-# Kenttälaitepaketti (Windows, ei Dockeria)
+# Kenttälaitepaketti (Windows ja Linux, ei Dockeria)
 
 **In English:** [../en/field-package.md](../en/field-package.md)
 
@@ -19,7 +19,8 @@ python tools/make_relay_package.py --system field-relay-01                   # �
 | `--lang` | kysytään asennuksessa | `fi` tai `en`: asentimen ja sen viestien kieli |
 | `--mode` | kysytään asennuksessa | `direct`, `multicast` tai `server` ([tilat](modes.md)) |
 | `--tak-server`, `--tak-p12`, `--tak-trust-p12` | – | `server`-tila: osoite ja .p12-tiedostot (kopioidaan kansioon `certs/tak/`). Salasana kysytään asennuksessa |
-| `--ingest-uids` | – | `TAK_INGEST_UIDS`: laitteiden uidit, joiden sijainnin saa julkaista |
+| `--share-markers` | kysytään asennuksessa | `on` tai `off`: `TAK_SHARE_MARKERS`, merkit ja piirrokset backboneen |
+| `--ingest-uids` | – | `TAK_INGEST_UIDS`: laitteiden uidit (`*` = kaikki), joiden sijainnin saa julkaista |
 | `--cert-dir` | `./certs` | Mukaan otettava bundle (yksi sertifikaatti- ja avainpari + CA) |
 | `--tak-host`, `--tak-udp-port` | `127.0.0.1`, `6969` | Missä TAK-pääte kuuntelee CoT:tä |
 | `--tak-port` | `8087` | TCP-striimin portti |
@@ -52,6 +53,8 @@ versionhallinnan ulkopuolelle.
    2. **Tilan:** suora, lähiverkko tai TAK Server ([tilat](modes.md)).
    3. **Tilan lisätiedot:** TAK Serverin osoite, .p12-tiedostot ja salasana; lähiverkkotilassa
       niiden laitteiden uidit, joiden sijainnin saa julkaista.
+   4. **Merkkien ja piirrosten jako:** pois tai päälle (kaikki CoT-merkit ja piirrokset, myös
+      vihollismerkit, menevät backboneen; viestit eivät koskaan).
 
    Mitä on valittu valmiiksi `make_relay_package.py`:llä, sitä ei kysytä. Vastaukset tallentuvat
    tiedostoon `device.env`. Sen jälkeen asennin rekisteröi automaattisen käynnistyksen
@@ -81,3 +84,49 @@ Jos haluat julkaista vain laitteen oman sijainnin, poista risuaita `device.env`-
 
 Koko sykli (asennus → terve tila oikeaa fabricia vasten ja CoT useilta valmistajilta → poisto →
 ei uudelleenkäynnistystä) on varmistettu Windows-kenttälaitteilla.
+
+## Linux
+
+Paketti rakennetaan valinnalla `--platform linux`:
+
+```bash
+python tools/make_relay_package.py --system field-relay-02 --platform linux   # → dist/field-relay-02-tak-relay-linux.tar.gz
+```
+
+`.tar.gz`-paketissa on yksi kansio, jossa ovat `app/`, `certs/`, `device.env`, `install.sh`,
+`run.sh`, `uninstall.sh`, `common.sh`, `lang.txt` (kaikki viestit suomeksi ja englanniksi), ohjeet
+molemmilla kielillä sekä riippuvuuksien wheelit x86_64- ja aarch64-koneille (Python 3.10–3.13,
+noin 40 Mt). Valinnat ovat samat kuin Windows-paketissa; `--no-bundled-wheels` jättää wheelit
+pois, jolloin laite tarvitsee verkkoyhteyden asennukseen. Skriptit ovat kansiossa
+`tools/field_package/linux/`.
+
+Laitteessa pitää olla glibc 2.28 tai uudempi (esim. Debian 10+, Ubuntu 20.04+ tai 64-bittinen
+Raspberry Pi OS), Python 3.10+ venv-moduulin kanssa (`sudo apt install python3 python3-venv`) ja
+bash. Musl-pohjaisia järjestelmiä, kuten Alpinea, ei tueta.
+
+Asenna sillä käyttäjällä, joka ajaa relayta, ei pääkäyttäjänä:
+
+```bash
+tar -xzf field-relay-02-tak-relay-linux.tar.gz && cd field-relay-02-tak-relay-linux
+./install.sh             # käyttäjän systemd-palvelu: käynnistyy, kun kirjaudut sisään
+./install.sh --at-boot   # systemd-palvelu, joka käynnistyy koneen mukana; sudo vain asennukseen
+```
+
+Asennin kysyy samat asiat kuin Windows-asennin. Suorassa tilassa se kysyy lisäksi, minne CoT
+lähtee UDP:llä (`TAK_UDP_TARGETS`) ja minkä muiden laitteiden oman sijainnin saa julkaista
+(`TAK_INGEST_UIDS`): Linuxissa TAK-sovellukset ovat yleensä muissa laitteissa, ja ilman listaa
+julkaistaan vain tämän koneen TAK-sovellusten sijainnit.
+
+- `--at-boot`-palvelu ajetaan asentavana käyttäjänä, ei koskaan pääkäyttäjänä.
+- Jos käyttäjän systemd-istuntoa ei ole, asennin lisää käyttäjän crontabiin `@reboot`-rivin.
+- Pakettikansion ja `certs/`-kansion oikeuksiksi asetetaan 700, avaimen, .p12-tiedostojen ja
+  `device.env`-tiedoston 600.
+- `./run.sh --check-only` ajaa `doctor.py`-tarkistuksen, lokit ovat kansiossa `logs/`, ja
+  `./uninstall.sh` poistaa automaattisen käynnistyksen ja pysäyttää relayn.
+- Palomuurin (esim. ufw) pitää päästää TAK-laitteet TCP-porttiin 8087 ja UDP-porttiin 6971
+  (suora tila) tai multicast-ryhmään (lähiverkko). Lähiverkkotila toimii Linuxissa natiivisti,
+  toisin kuin Docker Desktopissa.
+
+CI asentaa, tarkistaa ja poistaa Linux-paketin Ubuntussa jokaisen `main`-haaran pushin ja pull
+requestin yhteydessä sekä ennen jokaista julkaisua. Paketti on vielä kokeilematta kenttälaitteella
+oikeiden TAK-laitteiden kanssa.

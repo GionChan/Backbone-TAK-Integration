@@ -12,7 +12,9 @@ TAK -> backbone (optional, TAK_INGEST=1)
     to <org>/tak/pli/v1/<uid> (friendly PLI by default). Off by default: it writes to the shared
     backbone. Events from a TAK Server link carry other users' positions and are never published
     unless TAK_INGEST_FROM includes "server". TAK_INGEST_UIDS limits publishing to named devices;
-    without it only TAK clients on this machine (loopback) may publish.
+    without it only TAK clients on this machine (loopback) may publish, "*" lets any device.
+  * TAK_SHARE_MARKERS=1: markers and drawings made on those devices (CoT with a p-p link to their
+    creator) go to <org>/tak/cot/v1/<uid>, and their deletions follow. Messages (b-t-*) never.
     Events whose uid the relay itself sent to TAK in the last 60 s are dropped (no echo loops).
 
 Operations
@@ -69,7 +71,7 @@ import symbology  # noqa: E402
 import tak_links  # noqa: E402
 import video_relay  # noqa: E402
 
-__version__ = "1.1.4"
+__version__ = "1.2.0"
 START = time.time()
 GATEWAY_SYSTEM = os.environ.get("GATEWAY_SYSTEM", "tak-gateway")
 UDP_IN_PORT = int(os.environ.get("TAK_UDP_IN_PORT", "0"))
@@ -95,6 +97,12 @@ except tak_links.ConfigError as _exc:  # reported by main(); keeps the module im
 # Link kinds: "local" (UDP input, TCP server clients), "lan" (multicast group), "server" (TAK Server).
 INGEST_FROM = _csv_set("TAK_INGEST_FROM", tak_links.default_ingest_from(MODE))
 INGEST_UIDS = _csv_set("TAK_INGEST_UIDS")            # empty = devices on this machine only ("lan" needs the list)
+ANY_DEVICE = "*" in INGEST_UIDS                       # "*" = any device on the allowed links
+# Markers and drawings made on TAK devices -> <org>/tak/cot/v1/<uid>. Off unless set to 1.
+SHARE_MARKERS = os.environ.get("TAK_SHARE_MARKERS", "0") == "1"
+_marker_limiter = cot_guard.RateLimiter(1.0)
+_published_markers: dict = {}  # marker uid -> when published (oldest first, bounded): deletions
+_published_lock = threading.Lock()
 _CONFIG_ERRORS = []  # reported by main(), like _MODE_ERROR, so the module stays importable
 
 
@@ -266,9 +274,75 @@ def tag(data: bytes) -> bytes:
     return data[:j] + b"<detail>" + RELAY_TAG + b"</detail>" + data[j:] if j >= 0 else data
 
 
+def _creator(root) -> str:
+    """uid of the device that made a marker or drawing (its <link relation="p-p">), "" for a PLI."""
+    for link in root.iter("link"):
+        if link.get("relation") == "p-p" and link.get("uid") and link.get("uid") != root.get("uid"):
+            return link.get("uid")
+    return ""
+
+
+def _allowed(device_uid: str, kind: str) -> bool:
+    """TAK_INGEST_UIDS for this device; "*" = any device on the allowed links. Kind "lan" always
+    needs the list."""
+    if ANY_DEVICE:
+        return True
+    if INGEST_UIDS or kind == "lan":
+        return device_uid in INGEST_UIDS
+    return True  # empty list, kind "local": this machine only, checked by origin already
+
+
+def _publish(key: str, ev: bytes, counter: str) -> bool:
+    try:
+        SESSION[0].put(key, ev)
+        inc(counter)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        inc("gateway_ingest_errors_total")
+        log(f"ingest publish failed: {exc}")
+        return False
+
+
+def _ingest_marker(root, ev: bytes, uid: str, creator: str, kind: str) -> None:
+    """A marker or drawing made on a TAK device -> <org>/tak/cot/v1/<uid> (TAK_SHARE_MARKERS=1)."""
+    if not SHARE_MARKERS:
+        inc('gateway_ingest_dropped_total{reason="markers-off"}')
+        return
+    if not _allowed(creator, kind):
+        inc('gateway_ingest_dropped_total{reason="not-allowed"}')
+        return
+    if _recently_forwarded(uid, root.get("time", "")):
+        inc('gateway_ingest_dropped_total{reason="echo"}')
+        return
+    if not _marker_limiter.allow(uid):
+        inc('gateway_ingest_dropped_total{reason="rate-limited"}')
+        return
+    if _publish(f"{gc.ORG}/tak/cot/v1/{_safe_key(uid)}", ev, "gateway_markers_published_total"):
+        with _published_lock:
+            _published_markers.pop(uid, None)
+            _published_markers[uid] = time.time()
+            while len(_published_markers) > 10000:
+                _published_markers.pop(next(iter(_published_markers)))
+
+
+def _ingest_delete(root, ev: bytes) -> None:
+    """A deletion (t-x-d-d) of a marker this relay published goes to that marker's key, so the
+    marker disappears from the other TAK devices too. Other deletions stay on the TAK network."""
+    target = next((link.get("uid") for link in root.iter("link") if link.get("uid")), "")
+    with _published_lock:
+        known = SHARE_MARKERS and target in _published_markers
+    if not known:
+        inc('gateway_ingest_dropped_total{reason="delete-unknown"}')
+        return
+    if _publish(f"{gc.ORG}/tak/cot/v1/{_safe_key(target)}", ev, "gateway_marker_deletes_published_total"):
+        with _published_lock:
+            _published_markers.pop(target, None)
+
+
 def ingest_event(ev: bytes, origin: str, kind: str = "local") -> None:
-    """Publish one CoT event from a TAK link as PLI. kind: "local", "lan" or "server"."""
-    if not INGEST[0] or SESSION[0] is None:
+    """Publish one CoT event from a TAK link: a device's own position (PLI, TAK_INGEST=1) or a
+    marker or drawing (TAK_SHARE_MARKERS=1). kind: "local", "lan" or "server"."""
+    if not (INGEST[0] or SHARE_MARKERS) or SESSION[0] is None:
         return
     if kind not in INGEST_FROM:
         inc('gateway_ingest_dropped_total{reason="not-local"}')
@@ -280,7 +354,7 @@ def ingest_event(ev: bytes, origin: str, kind: str = "local") -> None:
     # could otherwise put positions on the fabric under the org's identity.
     if kind == "local" and not INGEST_UIDS and not _from_loopback(origin):
         inc('gateway_ingest_dropped_total{reason="not-loopback"}')
-        _log_once(_origin_ip(origin), f"PLI from {origin} not published: not this machine and "
+        _log_once(_origin_ip(origin), f"CoT from {origin} not published: not this machine and "
                   "TAK_INGEST_UIDS is empty (list the device uid to publish it)")
         return
     ok, reason = cot_guard.validate_cot(ev)
@@ -292,11 +366,25 @@ def ingest_event(ev: bytes, origin: str, kind: str = "local") -> None:
     except ET.ParseError:
         return
     typ = root.get("type", "")
+    uid = root.get("uid", "")
+    if typ.startswith("b-t-"):
+        # GeoChat and the other messages stay on the TAK network, whatever the settings.
+        inc('gateway_ingest_dropped_total{reason="chat"}')
+        return
+    if typ == "t-x-d-d":
+        _ingest_delete(root, ev)
+        return
+    creator = _creator(root)
+    if creator and not typ.startswith("t-"):
+        _ingest_marker(root, ev, uid, creator, kind)
+        return
+    if not INGEST[0]:
+        inc('gateway_ingest_dropped_total{reason="pli-off"}')
+        return
     if typ.startswith("t-") or not typ.startswith(_INGEST_PREFIXES):
         inc('gateway_ingest_dropped_total{reason="type"}')
         return
-    uid = root.get("uid", "")
-    if (INGEST_UIDS or kind == "lan") and uid not in INGEST_UIDS:
+    if not _allowed(uid, kind):
         inc('gateway_ingest_dropped_total{reason="not-allowed"}')
         return
     if _recently_forwarded(uid, root.get("time", "")):
@@ -305,12 +393,7 @@ def ingest_event(ev: bytes, origin: str, kind: str = "local") -> None:
     if not _pli_limiter.allow(uid):
         inc('gateway_ingest_dropped_total{reason="rate-limited"}')
         return
-    try:
-        SESSION[0].put(f"{gc.ORG}/tak/pli/v1/{_safe_key(uid)}", ev)
-        inc("gateway_ingest_published_total")
-    except Exception as exc:  # noqa: BLE001
-        inc("gateway_ingest_errors_total")
-        log(f"ingest publish failed: {exc}")
+    _publish(f"{gc.ORG}/tak/pli/v1/{_safe_key(uid)}", ev, "gateway_ingest_published_total")
 
 
 def _reader(sock: socket.socket, origin: str, kind: str = "local") -> None:
@@ -871,6 +954,7 @@ class Ops(BaseHTTPRequestHandler):
                                         "system": GATEWAY_SYSTEM, "counters": counters, "gauges": gauges,
                                         "outputs": [o.status() for o in OUTPUTS], "ingest": INGEST[0],
                                         "ingest_from": sorted(INGEST_FROM), "ingest_uids": sorted(INGEST_UIDS),
+                                        "share_markers": SHARE_MARKERS,
                                         "video": VIDEO.status() if VIDEO is not None else None}, indent=1))
         else:
             self._send(404, '{"error":"not found"}')
@@ -905,10 +989,11 @@ def main() -> None:
     http_bind = os.environ.get("GATEWAY_HTTP_BIND", "127.0.0.1")
     threading.Thread(target=ThreadingHTTPServer((http_bind, port), Ops).serve_forever, daemon=True).start()
     log(f"v{__version__} mode={MODE} org={gc.ORG} outputs={[o.name for o in OUTPUTS]} ingest={INGEST[0]} "
-        f"ingest_from={','.join(sorted(INGEST_FROM))} ingest_uids={len(INGEST_UIDS) or 'this machine'} http={http_bind}:{port}")
-    if INGEST[0] and not INGEST_UIDS and os.path.exists("/.dockerenv"):
-        log("WARNING: TAK_INGEST=1 without TAK_INGEST_UIDS in Docker publishes nothing: packets from the "
-            "host do not come from 127.0.0.1. Set TAK_INGEST_UIDS to the device uids.")
+        f"ingest_from={','.join(sorted(INGEST_FROM))} ingest_uids={'any device' if ANY_DEVICE else len(INGEST_UIDS) or 'this machine'} "
+        f"share_markers={'on' if SHARE_MARKERS else 'off'} http={http_bind}:{port}")
+    if (INGEST[0] or SHARE_MARKERS) and not INGEST_UIDS and os.path.exists("/.dockerenv"):
+        log("WARNING: TAK_INGEST=1 or TAK_SHARE_MARKERS=1 without TAK_INGEST_UIDS in Docker publishes nothing: "
+            "packets from the host do not come from 127.0.0.1. Set TAK_INGEST_UIDS to the device uids (or *).")
 
     if UDP_IN_PORT:
         start_udp_input(UDP_IN_PORT)

@@ -35,6 +35,8 @@ Asennin kysyy:
 
 3. **Tilan lisätiedot:** TAK Server -tilassa serverin osoitteen, varmenteet ja salasanan.
    Lähiverkkotilassa ne laitteet, joiden oman sijainnin saa julkaista backboneen.
+4. **Merkkien ja piirrosten jako:** pois tai päälle (kaikki CoT-merkit ja piirrokset, myös
+   vihollismerkit, menevät backboneen; viestit eivät koskaan).
 
 Lopuksi asennin käynnistää relayn, tarkistaa sen tilan ja kertoo, mitä TAK-ohjelmaan pitää
 asettaa. Valinnat tallentuvat tiedostoon `device.env`.

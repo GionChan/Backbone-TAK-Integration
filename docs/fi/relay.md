@@ -135,43 +135,60 @@ jos ne eivät etene 10 sekuntiin, ja relay muodostaa yhteyden uudelleen.
 Älä syötä samoja laitteita sekä suoraan (UDP tai `:8087`) että TAK Serverin kautta, koska silloin
 jokainen merkki tulee kahdesti. Valitse jokaiselle laitteelle yksi reitti.
 
-## TAK → backbone (PLI)
+## TAK → backbone (PLI, merkit ja piirrokset)
+
+Kaksi kytkintä, kumpikin oletuksena pois päältä, koska ne kirjoittavat jaettuun backboneen:
 
 | Muuttuja | Oletus | Merkitys |
 | --- | --- | --- |
-| `TAK_INGEST` | `0` | `1`: julkaise omat (friendly) CoT-tapahtumat polkuun `<slot>/tak/pli/v1/<uid>` |
-| `TAK_INGEST_TYPES` | `a-f-` | Hyväksytyt tyyppietuliitteet pilkulla erotettuina |
+| `TAK_INGEST` | `0` | `1`: laitteen oma sijainti (oma PLI) polkuun `<slot>/tak/pli/v1/<uid>` |
+| `TAK_SHARE_MARKERS` | `0` | `1`: laitteissa tehdyt merkit ja piirrokset polkuun `<slot>/tak/cot/v1/<uid>` |
+| `TAK_INGEST_TYPES` | `a-f-` | Vain PLI: hyväksytyt tyyppietuliitteet pilkulla erotettuina |
 | `TAK_INGEST_FROM` | `local` (`multicast`-tilassa `local,lan`) | Mistä yhteyksistä saa julkaista: `local` (UDP-sisääntulo, porttiin `:8087` yhdistäneet asiakkaat), `lan` (multicast-ryhmä, vain `TAK_INGEST_UIDS`-listan kanssa), `server` (TAK Server -yhteys). Pilkulla erotettuina |
-| `TAK_INGEST_UIDS` | tyhjä | Julkaistavien laitteiden uidit pilkulla erotettuina (esim. `ANDROID-abc123`). Tyhjä = vain tämän koneen TAK-sovellukset (loopback) |
+| `TAK_INGEST_UIDS` | tyhjä | Julkaisevien laitteiden uidit pilkulla erotettuina (esim. `ANDROID-abc123`). Tyhjä = vain tämän koneen TAK-sovellukset (loopback); `*` = mikä tahansa laite sallituissa yhteyksissä |
 | `TAK_UDP_IN_PORT` | `0` (compose: `6971`) | UDP-portti TAK-asiakkaiden CoT:lle (niiden UDP-ulostulo) |
 
-Myös porttiin `:8087` yhdistäneiden TCP-asiakkaiden lähettämät tapahtumat luetaan. Enintään
-yksi päivitys sekunnissa uidia kohden; tehtävätyyppejä (`t-*`) ja muita kuin omia tyyppejä ei
-julkaista. Tämä kirjoittaa jaettuun backboneen, joten se on oletuksena pois päältä.
+Myös porttiin `:8087` yhdistäneiden TCP-asiakkaiden lähettämät tapahtumat luetaan.
 
-Backboneen julkaistaan vain omien laitteiden sijainnit:
+**PLI.** Enintään yksi päivitys sekunnissa uidia kohden; tehtävätyyppejä (`t-*`) ja muita kuin
+omia tyyppejä ei julkaista PLI:nä.
+
+**Merkit ja piirrokset** (`TAK_SHARE_MARKERS=1`). Merkki tai piirros on CoT-tapahtuma, jossa on
+`<link relation="p-p">` sen tehneeseen laitteeseen. Jokainen tällainen tapahtuma jaetaan, myös
+vihollismerkit (`a-h-*`, `b-m-p-*`, `u-d-*` ja muut). Sallittujen lista koskee merkin tehnyttä
+laitetta. Poisto (`t-x-d-d`) julkaistaan niille merkeille, jotka tämä relay on julkaissut, joten
+merkki katoaa myös muista TAK-laitteista; muut poistot pysyvät TAK-verkossa. Enintään yksi
+päivitys sekunnissa merkkiä kohden. Muiden organisaatioiden relayt välittävät jo nyt avaimen
+`*/tak/cot/v1/**` TAK-asiakkailleen.
+
+**Viestejä ei jaeta koskaan.** GeoChat ja kaikki muut `b-t-*`-tapahtumat pysyvät TAK-verkossa
+asetuksista riippumatta (`reason="chat"`).
+
+Backboneen julkaistaan vain omien laitteiden tapahtumat:
 
 - **TAK Serverin käyttäjät pysyvät TAK Serverillä.** `tcp_client`-yhteydessä kulkevat kaikkien
   serverin käyttäjien tiedot. Ne näytetään TAKissa, mutta niitä ei julkaista backboneen, ellei
   asetuksena ole `TAK_INGEST_FROM=local,server`.
-- **Vain tämä kone, ellei laitetta ole listattu.** Ilman `TAK_INGEST_UIDS`-listaa julkaistaan
+- **Vain tämä kone, ellei laitteita ole listattu.** Ilman `TAK_INGEST_UIDS`-listaa julkaistaan
   vain tältä koneelta (127.0.0.1) tulevat tapahtumat. Muuten kuka tahansa verkossa voisi
-  julkaista sijainteja backboneen sinun slotissasi. Jos haluat julkaista toisen koneen laitteen,
-  lisää sen uid listaan.
-- **Sallittujen lista.** Kun `TAK_INGEST_UIDS` on asetettu, julkaistaan vain listatut uidit,
-  vaikka terminaali välittäisi muidenkin sijainteja. Laite ilmoittaa uidinsa itse, joten lista
-  estää vahingot mutta ei tahallista väärentäjää: pidä portit 6971 ja 8087 poissa
-  epäluotettavista verkoista.
-- **Ei kaikua.** Uidia, jonka relay on itse lähettänyt TAKiin viimeisen 60 sekunnin aikana, ei
-  julkaista takaisin.
+  julkaista sinun slotissasi. Jos haluat julkaista muiden koneiden laitteita, lisää niiden uidit
+  listaan tai aseta `*` kaikille verkon laitteille.
+- **Sallittujen lista.** Kun `TAK_INGEST_UIDS` on asetettu, julkaistaan vain listattujen
+  laitteiden tapahtumat, vaikka terminaali välittäisi muidenkin tapahtumia. Laite ilmoittaa
+  uidinsa itse, joten lista estää vahingot mutta ei tahallista väärentäjää: pidä portit 6971 ja
+  8087 poissa epäluotettavista verkoista.
+- **Ei kaikua.** Tapahtumaa, jonka relay on itse lähettänyt TAKiin (siinä on relayn merkintä tai se
+  on lähetetty viimeisen 60 sekunnin aikana), ei julkaista takaisin.
 
-Dockerissa isännän paketit eivät tule osoitteesta 127.0.0.1, joten siellä `TAK_INGEST=1` vaatii
+Dockerissa isännän paketit eivät tule osoitteesta 127.0.0.1, joten siellä julkaiseminen vaatii
 `TAK_INGEST_UIDS`-listan.
 
-Hylätyt tapahtumat lasketaan mittariin
-`gateway_ingest_dropped_total{reason="not-local"|"not-loopback"|"not-allowed"|"echo"|"relayed"}` (`relayed`:
-tapahtumassa on toisen relayn merkintä, ks. [tilat](modes.md#kaikissa-tiloissa)), ja `/status` näyttää
-asetukset `ingest_from` ja `ingest_uids`.
+Hylätyt tapahtumat lasketaan mittariin `gateway_ingest_dropped_total{reason=...}`: `not-local`,
+`not-loopback`, `not-allowed`, `echo`, `relayed` (tapahtumassa on toisen relayn merkintä, ks.
+[tilat](modes.md#kaikissa-tiloissa)), `chat`, `markers-off`, `pli-off`, `delete-unknown`.
+Julkaistut merkit lasketaan mittariin `gateway_markers_published_total` ja niiden poistot
+mittariin `gateway_marker_deletes_published_total`. `/status` näyttää asetukset `ingest_from`,
+`ingest_uids` ja `share_markers`.
 
 ## Heartbeat ja terveystila
 
@@ -237,6 +254,11 @@ mediamtx ovat Docker-imagessa valmiina.
 
 ## Tunnetut rajoitukset
 
+- Merkkien ja piirrosten jako perustuu siihen, miten ATAK ja WinTAK merkitsevät merkin tekijän
+  (`<link relation="p-p">`) ja lähettävät poiston (`t-x-d-d`). Se on testattu tällaisilla
+  tapahtumilla mutta ei vielä oikeilla TAK-laitteilla. Merkkiä, jossa ei ole tekijän linkkiä,
+  käsitellään PLI:nä. Relay muistaa julkaisemansa merkit vain muistissa: uudelleenkäynnistyksen
+  jälkeen poisto julkaistaan, kun merkkiä on ensin muutettu ja se on jaettu uudelleen.
 - ATAK-yhteyspaketti (`make_atak_package.py`) ja CoT:n `<video>`-elementti on kirjoitettu
   TAK-dokumentaation perusteella, eikä niitä ole vielä varmistettu oikealla TAK-asiakkaalla.
   MediaMTX-putki itsessään on varmistettu päästä päähän.

@@ -29,11 +29,13 @@ demo/
   local_router.py       offline Zenoh router :7447
   tools/                live_monitor.py read_cot.py verify_efdi.py
   edge_ai/              edge-AI demo (own Dockerfile; copies relay/heartbeat.py + identity.py)
-  run-backbone-demo.ps1 setup-certs.ps1
-tools/                  make_relay_package.py (field ZIP; --template = publishable, no cert),
+  run-backbone-demo.ps1/.sh setup-certs.ps1/.sh   (Windows / Linux, macOS)
+tools/                  make_relay_package.py (field ZIP, or .tar.gz with --platform linux; --template = publishable, no cert),
                         check_release.py (versions agree), register_portal_topics.py (WRITES PORTAL)
   field_package/        installer scripts + READMEs for the ZIP; lang.ps1 holds every message (fi, en)
                         bundled Python: make_relay_package.EMBED_PYTHON (pinned SHA256) + FIELD_REQUIREMENTS
+    linux/              install.sh run.sh uninstall.sh common.sh (systemd; crontab fallback); lang.txt = messages;
+                        wheels for LINUX_ARCHES x LINUX_PYTHONS; never run as root (the --at-boot unit has User=)
 tests/                  unittest; e2e_gateway.py needs a local router
 docker-compose.yml      default = relay only; profiles: demo, edge, edge-api
 Dockerfile              targets: relay, demo; layout /opt/tak/{relay,demo}; runs as UID 10001
@@ -48,6 +50,7 @@ python -m compileall -q relay demo tools tests
 python relay/doctor.py                                   # preflight; exit 1 on failures
 python demo/local_router.py &                            # or: docker compose --profile demo up -d zenoh-router
 python tests/e2e_gateway.py                              # prints "GATEWAY E2E PASSED"
+shellcheck -x -P SCRIPTDIR --severity=warning tools/field_package/linux/*.sh demo/*.sh tests/*.sh   # CI lints every .sh
 docker compose up -d                                     # relay only
 docker compose --profile demo up -d                      # + demo
 ```
@@ -77,10 +80,14 @@ CI: .github/workflows/tests.yml, windows-latest + ubuntu-latest, Python 3.12.
     filtered by `INGEST_FROM` (default local), `INGEST_UIDS` and the echo guard (`_forwarded`).
     A TAK Server carries other users' positions; never publish them by default. Kind "lan"
     (multicast) is published only for uids in INGEST_UIDS. Kind "local" without INGEST_UIDS is
-    published only from loopback (`_from_loopback`). Events with RELAY_TAG are never published.
+    published only from loopback (`_from_loopback`); "*" in INGEST_UIDS = any device (ANY_DEVICE).
+    Events with RELAY_TAG are never published. Markers and drawings (a p-p link to the creator,
+    `_creator`) go to <org>/tak/cot/v1/<uid> only with TAK_SHARE_MARKERS=1, the allowlist applying to
+    the creator; t-x-d-d only for uids in `_published_markers`. Messages (b-t-*) are never published.
 11. dispatch() tags every outgoing CoT with RELAY_TAG (loop protection between relays).
-12. Field-package messages live in tools/field_package/lang.ps1 with the same keys in fi and en
-    (test_same_keys_in_fi_and_en, test_used_keys_exist). Never hard-code user text in the .ps1.
+12. Field-package messages live in tools/field_package/lang.ps1 and tools/field_package/linux/lang.txt,
+    with the same keys in fi and en (test_same_keys_in_fi_and_en, test_used_keys_exist, also for
+    Linux). Never hard-code user text in the .ps1 or .sh installers. device.env is parsed, never sourced.
 13. Unauthenticated listeners: GATEWAY_HTTP_BIND defaults to 127.0.0.1, also in the image;
     compose sets 0.0.0.0 in the container and publishes on the host's 127.0.0.1. TAK ports stay
     on all interfaces (TAK devices must reach them); the TCP server refuses clients beyond
@@ -100,7 +107,7 @@ Env vars are documented in docs/en/relay.md (single source; update it when addin
 Identity: GOAT_CERT/KEY/CA, GOAT_CERT_DIR (exclusive when set), GOAT_ORG, GOAT_ROUTER (tls/; else NOTES.md),
 GOAT_LOCAL_ROUTER (tcp/). Mode: TAK_MODE (direct|multicast|server, docs/en/modes.md), TAK_LOCAL_OUTPUTS, TAK_MULTICAST_*.
 Outputs: TAK_UDP_TARGETS, TAK_PORT, TAK_MAX_CLIENTS(_PER_IP), TAK_SERVER*, GATEWAY_CONFIG. Ingest:
-GATEWAY_INGEST_ALL, TAK_INGEST, TAK_INGEST_FROM, TAK_INGEST_UIDS, TAK_UDP_IN_PORT. Ops: GATEWAY_HTTP_PORT,
+GATEWAY_INGEST_ALL, TAK_INGEST, TAK_SHARE_MARKERS, TAK_INGEST_FROM, TAK_INGEST_UIDS, TAK_UDP_IN_PORT. Ops: GATEWAY_HTTP_PORT,
 GATEWAY_HTTP_BIND, GATEWAY_SYSTEM,
 GATEWAY_WATCHDOG_S, GATEWAY_LOST_S. Video: GATEWAY_VIDEO*.
 
@@ -111,6 +118,7 @@ GATEWAY_WATCHDOG_S, GATEWAY_LOST_S. Video: GATEWAY_VIDEO*.
 | `<org>/sensor/v1/**` | in | JSON telemetry {source,lat,lon,alt,heading,speed_kmh,type,phase,lost} |
 | `*/tak/cot/v1/**` or `**` (INGEST_ALL) | in | any vendor; see backbone_cot.ALL_SOURCES |
 | `<org>/tak/pli/v1/<uid>` | out | friendly CoT from TAK clients (TAK_INGEST=1) |
+| `<org>/tak/cot/v1/<uid>` | out | markers, drawings and their deletions from TAK clients (TAK_SHARE_MARKERS=1) |
 | `<org>/<system>/heartbeat/v1` | out | heartbeat JSON |
 | `<org>/exercise/**`, `<org>/tak/cot/v1/EXERCISE.*` | demo out | sender.py |
 
@@ -126,7 +134,7 @@ __version__, docker-compose image tag and the newest CHANGELOG section must agre
 - New env var or behaviour: update docs/en/relay.md AND docs/fi/relay.md, CHANGELOG.md, tests.
 - New relay module: add to APP_FILES; tests enforce it.
 - New scenario: demo/scenarios/<name>.py using sender.Sender; document in docs/*/demo.md.
-- New installer message: add the key to BOTH fi and en in lang.ps1.
+- New installer message: add the key to BOTH fi and en in lang.ps1 (Windows) or linux/lang.txt (Linux).
 - Docs exist in two languages with the same file names (docs/en/X.md <-> docs/fi/X.md); keep
   them in sync. Finnish follows Kielitoimisto rules.
 - tools/register_portal_topics.py --apply and anything publishing to the real fabric affect a
@@ -144,4 +152,6 @@ __version__, docker-compose image tag and the newest CHANGELOG section must agre
 ATAK connection package format and CoT `<video>` element on a real TAK client. Edge-AI demo CoT
 is not exercise-labelled (README there says to set EDGE_COT_AFFIL=u).
 TAK_MODE=multicast with real TAK devices (tested only over loopback); TAK_MODE=server against a
-real TAK Server (tested against a local TLS server).
+real TAK Server (tested against a local TLS server). Marker sharing with real TAK devices (tested
+with generated events only). The Linux field package on a real field device
+(tested on the Ubuntu CI runner only, tests/ci_install_linux.sh).
