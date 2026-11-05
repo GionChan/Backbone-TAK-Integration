@@ -51,6 +51,8 @@ services:
       TAK_INGEST: ${TAK_INGEST:-0}
       TAK_INGEST_FROM: ${TAK_INGEST_FROM:-}
       TAK_INGEST_UIDS: ${TAK_INGEST_UIDS:-}
+      # 1 = markers and drawings made on those devices to <org>/tak/cot/v1/<uid>. Messages never.
+      TAK_SHARE_MARKERS: ${TAK_SHARE_MARKERS:-0}
       TAK_UDP_IN_PORT: "6971"
       # HTTP port on all container interfaces, so the 127.0.0.1-only port mapping below reaches it.
       GATEWAY_HTTP_BIND: 0.0.0.0

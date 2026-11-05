@@ -59,7 +59,8 @@ Polun suojaa neljä kerrosta:
    voi pysäyttää muita.
 
 Toiseen suuntaan (valinnainen) omien TAK-käyttäjien sijainnit julkaistaan polkuun
-`<slot>/tak/pli/v1/<uid>`, jolloin muut osallistujat näkevät ne.
+`<slot>/tak/pli/v1/<uid>` ja heidän tekemänsä merkit ja piirrokset polkuun
+`<slot>/tak/cot/v1/<uid>`, jolloin muut osallistujat näkevät ne. Viestejä ei julkaista koskaan.
 
 ## Tuote ja demo
 

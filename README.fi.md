@@ -12,7 +12,9 @@ Kaksisuuntainen silta **EFDI goat -fabricin** (Zenoh, mTLS, NetBird-mesh) ja
   ratamuodot ja oma JSON-telemetria (koko luettelo: [relay](docs/fi/relay.md#tunnistetut-muodot)).
   Viestit tarkistetaan, niiden tahtia rajoitetaan ja
   kaksoiskappaleet poistetaan ennen kuin ne lähetetään asiakkaalle.
-- **TAK → backbone.** Valinnaisesti omien TAK-käyttäjien sijainnit (PLI) julkaistaan backboneen.
+- **TAK → backbone.** Valinnaisesti, kumpikin omalla kytkimellään: omien TAK-käyttäjien sijainnit
+  (PLI) sekä heidän tekemänsä merkit ja piirrokset. Viestit (GeoChat) eivät koskaan lähde
+  TAK-verkosta.
 - **Operointi.** Pakollinen heartbeat, `/healthz`, Prometheus-mittarit (`/metrics`), `/status`,
   `/streams`-näkymä backbonen liikenteeseen, watchdog, joka käynnistää relayn uudelleen yhteyden
   tai datan katketessa, sekä valinnainen videon uudelleenlähetys (RTSP) TAKiin.
@@ -56,8 +58,8 @@ TAK Serveriä). Ks. [tilan valinta](docs/fi/modes.md). `direct`-tilassa ohjaa TA
 - **TAK Server:** aseta `.env`-tiedostoon `TAK_SERVER` ja sen .p12-tiedostot. Silloin jokainen
   serverin käyttäjä näkee backbonen. Ks. [relay: TAK Server](docs/fi/relay.md#tak-server).
 
-Backboneen menevät vain omien laitteiden sijainnit ja vain, kun `TAK_INGEST=1`. TAK Serverin
-käyttäjien sijainteja ei julkaista koskaan.
+Backboneen menevät vain omat laitteet: sijainnit, kun `TAK_INGEST=1`, sekä merkit ja piirrokset,
+kun `TAK_SHARE_MARKERS=1`. TAK Serverin käyttäjiä ei julkaista koskaan.
 
 Kenttälaitteet ilman Dockeria: itseasentuva paketti komennolla
 `python tools/make_relay_package.py --system <nimi>` (Windows) tai lisäksi `--platform linux`

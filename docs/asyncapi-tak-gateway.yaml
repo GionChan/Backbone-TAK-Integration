@@ -46,6 +46,19 @@ channels:
         name: CotEvent
         contentType: application/xml
         payload: {type: string, description: "CoT 2.0 <event>"}
+  "{org}/tak/cot/v1/{uid}":
+    description: |
+      Markers and drawings made on our TAK devices (TAK_SHARE_MARKERS=1): CoT events with a
+      <link relation="p-p"> to the device that made them, any type, hostile ones too. A deletion
+      (t-x-d-d) of a marker we published goes to that marker's uid. Messages (b-t-*) are never
+      published. At most 1 update per second per marker. The payload is the client's CoT event
+      unchanged.
+    parameters: {org: {schema: {type: string}}, uid: {schema: {type: string}}}
+    publish:
+      message:
+        name: CotEvent
+        contentType: application/xml
+        payload: {type: string, description: "CoT 2.0 <event>"}
   "{org}/exercise/{scenario}/v1/{uid}":
     description: |
       SIMULATED exercise injects from the demo scenarios (demo/sender.py). Not real reports. A CoT

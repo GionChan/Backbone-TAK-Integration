@@ -236,6 +236,10 @@ TAK_UDP_IN_PORT={tak_udp_in_port}
 # Required in mode multicast.
 {uids_line}
 
+# 1 = share markers and drawings made on those devices to the backbone (<org>/tak/cot/v1/<uid>),
+# hostile ones too. Messages are never shared. A commented line is asked by {installer}.
+{share_line}
+
 # Convert every recognised position format on the backbone (all vendors).
 GATEWAY_INGEST_ALL=1
 """
@@ -254,7 +258,8 @@ def build_package(system, cert_dir, out: str, tak_host: str, tak_udp_port: int,
                   tak_port: int, tak_ingest: bool, tak_udp_in_port: int, router: str = None,
                   lang: str = None, mode: str = None, tak_server: str = None, tak_p12: str = None,
                   tak_trust_p12: str = None, ingest_uids: str = None, bundle_python: bool = False,
-                  cache: str = CACHE_DIR, template: bool = False, platform: str = "windows") -> None:
+                  cache: str = CACHE_DIR, template: bool = False, platform: str = "windows",
+                  share_markers: bool = None) -> None:
     """template=True: no certificate bundle and no device name; the installer asks for both.
     platform: "windows" (ZIP; bundle_python = embeddable Python + wheels) or "linux" (.tar.gz;
     bundle_python = wheels for LINUX_ARCHES)."""
@@ -303,7 +308,8 @@ def build_package(system, cert_dir, out: str, tak_host: str, tak_udp_port: int,
         org_line=line("GOAT_ORG", org), router_line=line("GOAT_ROUTER", router),
         system_line=line("GATEWAY_SYSTEM", system), tak_host=tak_host, tak_udp_port=tak_udp_port,
         tak_port=tak_port, server_lines=server_lines, tak_ingest="1" if tak_ingest else "0",
-        tak_udp_in_port=tak_udp_in_port, uids_line=line("TAK_INGEST_UIDS", ingest_uids))
+        tak_udp_in_port=tak_udp_in_port, uids_line=line("TAK_INGEST_UIDS", ingest_uids),
+        share_line=line("TAK_SHARE_MARKERS", None if share_markers is None else ("1" if share_markers else "0")))
 
     # (name in the package, content, mode). The mode matters in the Linux .tar.gz only: the key,
     # the TAK Server .p12 files and device.env are 0600, the installer scripts 0755.
@@ -422,7 +428,9 @@ def main() -> None:
     p.add_argument("--tak-port", type=int, default=8087, help="TCP stream port for ATAK/WinTAK-style input")
     p.add_argument("--tak-udp-in-port", type=int, default=6971, help="UDP port this relay listens on for the TAK app's PLI")
     p.add_argument("--no-ingest", action="store_true", help="don't publish the device's own PLI to the backbone")
-    p.add_argument("--ingest-uids", help="TAK_INGEST_UIDS: device uids allowed to publish (comma-separated)")
+    p.add_argument("--ingest-uids", help="TAK_INGEST_UIDS: device uids allowed to publish (comma-separated, * = any)")
+    p.add_argument("--share-markers", choices=("on", "off"),
+                   help="TAK_SHARE_MARKERS: share markers and drawings (default: asked at install)")
     p.add_argument("--tak-server", help="mode server: TAK Server host[:port]")
     p.add_argument("--tak-p12", help="mode server: relay client certificate .p12 (copied to certs/tak/)")
     p.add_argument("--tak-trust-p12", help="mode server: TAK Server truststore .p12 (copied to certs/tak/)")
@@ -446,7 +454,8 @@ def main() -> None:
                   args.tak_port, not args.no_ingest, args.tak_udp_in_port, args.router,
                   lang=args.lang, mode=args.mode, tak_server=args.tak_server, tak_p12=args.tak_p12,
                   tak_trust_p12=args.tak_trust_p12, ingest_uids=args.ingest_uids,
-                  bundle_python=bundle, template=args.template, platform=args.platform)
+                  bundle_python=bundle, template=args.template, platform=args.platform,
+                  share_markers=None if args.share_markers is None else args.share_markers == "on")
 
 
 if __name__ == "__main__":

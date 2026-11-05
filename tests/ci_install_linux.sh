@@ -93,7 +93,7 @@ template_case() {
     check "template has no certificate or key" not has_text <(tar -tzf "$tpl" | grep -E '\.(pem|key|p12|cbor)$') "."
     make_bundle "$bundle/efdi-onboarding-ci"
     tar -czf "$ROOT/efdi-onboarding-ci.tar.gz" -C "$bundle" efdi-onboarding-ci
-    install_case tpl ci-lx-tpl "$tpl" "2\n$ROOT/efdi-onboarding-ci.tar.gz\nci-lx-tpl\n1\n\n\n" \
+    install_case tpl ci-lx-tpl "$tpl" "2\n$ROOT/efdi-onboarding-ci.tar.gz\nci-lx-tpl\n1\n\n\n1\n" \
         "No EFDI certificate bundle found|Certificate copied|Installation complete."
     check "tpl / NOTES.md copied (router)" [ -f "$PKG/certs/NOTES.md" ]
     check "tpl / device.env TAK_MODE=direct" grep -qx "TAK_MODE=direct" "$PKG/device.env"
@@ -120,11 +120,11 @@ make_bundle "$ROOT/bundle"
 build() { python3 "$REPO/tools/make_relay_package.py" --platform linux "$@" > /dev/null; }
 
 # 1. English, direct, wheels, --at-boot, no package index. Answers: 2 = English, 1 = direct,
-#    Enter = CoT to this machine, Enter = no other devices.
+#    Enter = CoT to this machine, Enter = no other devices, 1 = no sharing.
 build --system ci-lx-en --cert-dir "$ROOT/bundle" --out "$ROOT/ci-lx-en-tak-relay-linux.tar.gz"
 INSTALL_ENV="PIP_INDEX_URL=http://127.0.0.1:9/simple"
-install_case en-direct ci-lx-en "$ROOT/ci-lx-en-tak-relay-linux.tar.gz" "2\n1\n\n\n" \
-    "Choose language|Installation complete.|Next, on the TAK devices:|CoT goes to 127.0.0.1:6969" --at-boot
+install_case en-direct ci-lx-en "$ROOT/ci-lx-en-tak-relay-linux.tar.gz" "2\n1\n\n\n1\n" \
+    "Choose language|Installation complete.|Next, on the TAK devices:|CoT goes to 127.0.0.1:6969|Sharing markers and drawings: off" --at-boot
 UNIT=efdi-tak-relay-ci-lx-en.service
 check "en-direct / systemd service active" systemctl is-active --quiet "$UNIT"
 check "en-direct / service runs as $(id -un), not root" grep -qx "User=$(id -un)" "/etc/systemd/system/$UNIT"
@@ -133,12 +133,15 @@ uninstall_case en-direct
 check "en-direct / service removed" [ ! -f "/etc/systemd/system/$UNIT" ]
 INSTALL_ENV=""
 
-# 2. Finnish, local network, one device uid, no wheels. Answers: 1 = Suomi, 2 = multicast, the uid.
+# 2. Finnish, local network, one device uid, no wheels. Answers: 1 = Suomi, 2 = multicast, the uid,
+#    2 = share markers.
 build --system ci-lx-fi --cert-dir "$ROOT/bundle" --out "$ROOT/ci-lx-fi-tak-relay-linux.tar.gz" --no-bundled-wheels
-install_case fi-multicast ci-lx-fi "$ROOT/ci-lx-fi-tak-relay-linux.tar.gz" "1\n2\nANDROID-ci\n" \
-    "Valitse kieli|Asennus valmis.|Seuraavaksi TAK-laitteisiin:"
+install_case fi-multicast ci-lx-fi "$ROOT/ci-lx-fi-tak-relay-linux.tar.gz" "1\n2\nANDROID-ci\n2\n" \
+    "Valitse kieli|Asennus valmis.|Seuraavaksi TAK-laitteisiin:|Merkkien ja piirrosten jako: päällä"
 check "fi-multicast / device.env TAK_INGEST_UIDS=ANDROID-ci" grep -qx "TAK_INGEST_UIDS=ANDROID-ci" "$PKG/device.env"
 check "fi-multicast / /status mode multicast" [ "$(status_field mode 10)" = multicast ]
+check "fi-multicast / /status share_markers on" [ "$(status_field share_markers 10)" = True ]
+check "fi-multicast / device.env TAK_SHARE_MARKERS=1" grep -qx "TAK_SHARE_MARKERS=1" "$PKG/device.env"
 check "fi-multicast / automatic start registered" has_text "$WORK/out.txt" "Automaattinen käynnistys:"
 uninstall_case fi-multicast
 

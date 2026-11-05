@@ -2,6 +2,20 @@
 
 ## 1.2.0 — 2026-11-05
 
+### Relay
+
+- `TAK_SHARE_MARKERS=1` shares markers and drawings made on TAK devices to
+  `<slot>/tak/cot/v1/<uid>`: every CoT event with a `<link relation="p-p">` to the device that made
+  it, hostile markers too. A deletion (`t-x-d-d`) follows for markers this relay published. Off by
+  default; independent of `TAK_INGEST` (PLI). The installers ask for it; `/status`, the status page
+  and `doctor.py` show it.
+- Messages (GeoChat and every other `b-t-*`) are never published, whatever the settings.
+- `TAK_INGEST_UIDS=*` lets any device on the allowed links publish.
+- A user-placed friendly marker (`a-f-*` with a creator link) is no longer published as the
+  device's PLI; it is a marker and follows `TAK_SHARE_MARKERS`.
+- New drop reasons `chat`, `markers-off`, `pli-off`, `delete-unknown`; counters
+  `gateway_markers_published_total` and `gateway_marker_deletes_published_total`.
+
 ### Field package
 
 - Linux package: `make_relay_package.py --platform linux` builds a `.tar.gz` with `install.sh`,

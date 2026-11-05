@@ -40,6 +40,11 @@ fi|srv_password|Varmenteen salasana
 fi|srv_missing_file|Tiedostoa ei löydy: %s
 fi|mc_warning|Huom: lähiverkkotilassa backbonen tilannekuva näkyy kaikille samassa verkossa oleville.
 fi|mc_uids|Laitteet, joiden oman sijainnin saa julkaista backboneen (uidit pilkulla erotettuina, Enter = ei yhdenkään)
+fi|share_title|Jaetaanko näiden TAK-laitteiden merkit ja piirrokset backboneen?
+fi|share_1|  1) Ei      Merkit ja piirrokset pysyvät TAK-verkossa.
+fi|share_2|  2) Kyllä   Kaikki CoT-merkit ja piirrokset, myös vihollismerkit, näkyvät muille organisaatioille. Viestejä ei jaeta koskaan.
+fi|share_set_0|==> Merkkien ja piirrosten jako: pois päältä
+fi|share_set_1|==> Merkkien ja piirrosten jako: päällä
 fi|deps_ok|==> Riippuvuudet kunnossa.
 fi|perms|==> Varmenteet ja device.env vain tämän käyttäjän luettaviksi.
 fi|svc_user|==> Asennetaan käyttäjän systemd-palvelu, joka käynnistyy, kun kirjaudut sisään...
@@ -112,6 +117,11 @@ en|srv_password|Certificate password
 en|srv_missing_file|File not found: %s
 en|mc_warning|Note: in local-network mode everyone on the same network sees the backbone picture.
 en|mc_uids|Devices whose own position may be published to the backbone (uids, comma-separated, Enter = none)
+en|share_title|Share the markers and drawings of these TAK devices to the backbone?
+en|share_1|  1) No      Markers and drawings stay on the TAK network.
+en|share_2|  2) Yes     Every CoT marker and drawing, hostile ones too, is shown to other organisations. Messages are never shared.
+en|share_set_0|==> Sharing markers and drawings: off
+en|share_set_1|==> Sharing markers and drawings: on
 en|deps_ok|==> Dependencies ready.
 en|perms|==> Certificates and device.env readable by this user only.
 en|svc_user|==> Installing a systemd user service that starts when you sign in...

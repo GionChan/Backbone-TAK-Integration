@@ -1,6 +1,6 @@
 # TAK relay installer.
 #   1. language (fi / en)   2. certificate bundle and device name (template package only)
-#   3. mode (direct / local network / TAK Server) and its questions   4. dependencies
+#   3. mode (direct / local network / TAK Server) and its questions, sharing markers   4. dependencies
 #   5. automatic start   6. start now and check /status   7. what to set in TAK
 # Choices are saved in device.env; a choice already there is not asked again.
 #
@@ -214,6 +214,16 @@ if ($Mode -eq "multicast") {
         if ($uids) { Set-EnvValue "TAK_INGEST_UIDS" $uids }
     }
 }
+
+# ---- sharing markers and drawings (off or on; device.env keeps the answer)
+if ($env:TAK_SHARE_MARKERS -notin @("0", "1")) {
+    Write-Host ""
+    Write-Host (T "share_title")
+    Write-Host (T "share_1")
+    Write-Host (T "share_2")
+    Set-EnvValue "TAK_SHARE_MARKERS" (@{ "1" = "0"; "2" = "1" }[(Read-Choice @("1", "2"))])
+}
+Write-Host (T "share_set_$($env:TAK_SHARE_MARKERS)") -ForegroundColor Green
 
 # ---- 4. dependencies
 . (Join-Path $here "bootstrap.ps1")

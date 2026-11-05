@@ -122,10 +122,11 @@ function Test-Install([string]$Name, [string]$System, [string[]]$Answers, [hasht
     Check "$Name / port 8088 free again" ($null -eq (Get-Status 8088 5))
 }
 
-# 3. Template: no certificate, no name. Answers: 2 = English, bundle zip, device name, 1 = direct.
+# 3. Template: no certificate, no name. Answers: 2 = English, bundle zip, device name, 1 = direct,
+#    1 = do not share markers.
 $templateCase = @{
-    Name = "en-template"; System = "ci-relay-tpl"; Answers = @("2", "<BUNDLE>", "ci-relay-tpl", "1")
-    ExpectEnv = @{ RELAY_LANG = "en"; TAK_MODE = "direct"; GATEWAY_SYSTEM = "ci-relay-tpl" }
+    Name = "en-template"; System = "ci-relay-tpl"; Answers = @("2", "<BUNDLE>", "ci-relay-tpl", "1", "1")
+    ExpectEnv = @{ RELAY_LANG = "en"; TAK_MODE = "direct"; GATEWAY_SYSTEM = "ci-relay-tpl"; TAK_SHARE_MARKERS = "0" }
     ExpectText = @("No EFDI certificate bundle found", "Certificate copied", "Installation complete.")
 }
 if ($TemplateZip) {
@@ -135,16 +136,17 @@ if ($TemplateZip) {
     exit 0
 }
 
-# 1. English, direct, bundled Python, no Python on PATH. Answers: 2 = English, 1 = direct.
-Test-Install "en-direct" "ci-relay-en" @("2", "1") `
-    @{ RELAY_LANG = "en"; TAK_MODE = "direct" } `
+# 1. English, direct, bundled Python, no Python on PATH. Answers: 2 = English, 1 = direct, 1 = no sharing.
+Test-Install "en-direct" "ci-relay-en" @("2", "1", "1") `
+    @{ RELAY_LANG = "en"; TAK_MODE = "direct"; TAK_SHARE_MARKERS = "0" } `
     @("Choose language", "Installation complete.", "Next, in the TAK app:", "Set the CoT input to UDP port 6969") `
     -HidePython
 
-# 2. Finnish, local network, one device uid, no bundled Python. Answers: 1 = Suomi, 2 = multicast, the uid.
-Test-Install "fi-multicast" "ci-relay-fi" @("1", "2", "ANDROID-ci") `
-    @{ RELAY_LANG = "fi"; TAK_MODE = "multicast"; TAK_INGEST_UIDS = "ANDROID-ci" } `
-    @("Valitse kieli", "Asennus valmis.", "Seuraavaksi TAK-ohjelmaan:") `
+# 2. Finnish, local network, one device uid, no bundled Python. Answers: 1 = Suomi, 2 = multicast, the uid,
+#    2 = share markers.
+Test-Install "fi-multicast" "ci-relay-fi" @("1", "2", "ANDROID-ci", "2") `
+    @{ RELAY_LANG = "fi"; TAK_MODE = "multicast"; TAK_INGEST_UIDS = "ANDROID-ci"; TAK_SHARE_MARKERS = "1" } `
+    @("Valitse kieli", "Asennus valmis.", "Seuraavaksi TAK-ohjelmaan:", "Merkkien ja piirrosten jako: päällä") `
     -BuildArgs @("--no-bundled-python")
 
 Test-Install @templateCase -Template -BuildArgs @("--no-bundled-python")

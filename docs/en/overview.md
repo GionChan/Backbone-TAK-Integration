@@ -56,7 +56,8 @@ Four layers make the path secure:
    others.
 
 In the other direction (optional), friendly positions from your own TAK users are published to
-`<slot>/tak/pli/v1/<uid>`, so other participants see them.
+`<slot>/tak/pli/v1/<uid>`, and the markers and drawings they make to `<slot>/tak/cot/v1/<uid>`,
+so other participants see them. Messages are never published.
 
 ## Product and demo
 
