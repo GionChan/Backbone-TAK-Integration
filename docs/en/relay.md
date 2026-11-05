@@ -32,7 +32,7 @@
 | `GOAT_CERT`, `GOAT_KEY`, `GOAT_CA` | — | Explicit PEM paths (all three) |
 | `GOAT_CERT_DIR` | `<repo>/certs`, `./certs`, `/certs`, then `~/Downloads/efdi-onboarding-*` | Bundle directory. When set, it is the only one searched |
 | `GOAT_ORG` | certificate CN | Org slot. Needed only if the CN is not the slot |
-| `GOAT_ROUTER` | `Router endpoint` in the bundle's `NOTES.md`, else `tls/router.example:7447` | mTLS router |
+| `GOAT_ROUTER` | `Router endpoint` in the bundle's `NOTES.md` | mTLS router `tls/<router>:<port>`. Required when the bundle has no `NOTES.md`; without either the relay stops at start |
 | `GOAT_LOCAL_ROUTER` | `tcp/localhost:7447` | Router used when no bundle is found |
 | `GOAT_LEASE_MS` | `60000` | Zenoh lease; long, because relayed mesh paths stall |
 

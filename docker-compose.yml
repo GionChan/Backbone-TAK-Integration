@@ -15,14 +15,15 @@ x-fabric: &fabric
   environment: &fabric-env
     GOAT_CERT_DIR: /certs
     GOAT_ORG: ${GOAT_ORG:-}
-    # empty = the "Router endpoint" in certs/NOTES.md, else the EFDI router
+    # empty = the "Router endpoint" in certs/NOTES.md (required when there is no NOTES.md)
     GOAT_ROUTER: ${GOAT_ROUTER:-}
     # used only when ./certs is empty (local demo without the mesh)
     GOAT_LOCAL_ROUTER: tcp/zenoh-router:7447
   extra_hosts:
-    # Docker Desktop containers cannot use NetBird's mesh DNS, so pin the router's mesh IP.
-    # Find it with: nslookup router.example (while NetBird is up).
-    - "router.example:${EFDI_ROUTER_IP:-100.64.0.1}"
+    # Docker Desktop containers cannot use NetBird's mesh DNS, so pin the router's mesh IP:
+    # EFDI_ROUTER_HOST = the router name from certs/NOTES.md, EFDI_ROUTER_IP = nslookup of that
+    # name on the host while NetBird is up. Unset, this maps a placeholder name and does nothing.
+    - "${EFDI_ROUTER_HOST:-router.invalid}:${EFDI_ROUTER_IP:-127.0.0.1}"
 
 services:
 
@@ -30,7 +31,7 @@ services:
   tak-relay:
     <<: *fabric
     build: {context: ., target: relay}
-    image: efdi-tak-relay:1.1.3
+    image: efdi-tak-relay:1.1.4
     environment:
       <<: *fabric-env
       GATEWAY_SYSTEM: ${GATEWAY_SYSTEM:-tak-gateway}

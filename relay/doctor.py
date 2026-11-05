@@ -123,9 +123,13 @@ def check_netbird() -> None:
 def check_router(cert) -> None:
     if cert:
         endpoint = identity.router_for(cert)
+        if not endpoint:
+            report("FAIL", "fabric router", "not known: no GOAT_ROUTER and no 'Router endpoint:' in the bundle's NOTES.md",
+                   "set GOAT_ROUTER=tls/<router>:<port> from your onboarding bundle")
+            return
         ok, detail = _connect(*_split(endpoint))
         report("OK" if ok else "FAIL", "fabric router", f"{endpoint}: {detail}",
-               "check netbird; in Docker Desktop set EFDI_ROUTER_IP (nslookup the router on the host)")
+               "check netbird; in Docker Desktop set EFDI_ROUTER_HOST and EFDI_ROUTER_IP (nslookup the router on the host)")
     else:
         endpoint = os.environ.get("GOAT_LOCAL_ROUTER") or "tcp/localhost:7447"
         ok, detail = _connect(*_split(endpoint))

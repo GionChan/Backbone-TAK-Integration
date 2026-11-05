@@ -32,7 +32,7 @@
 | `GOAT_CERT`, `GOAT_KEY`, `GOAT_CA` | – | PEM-tiedostojen polut (kaikki kolme) |
 | `GOAT_CERT_DIR` | `<repo>/certs`, `./certs`, `/certs`, sitten `~/Downloads/efdi-onboarding-*` | Bundlen hakemisto. Kun asetettu, haetaan vain siitä |
 | `GOAT_ORG` | sertifikaatin CN | Slot. Tarvitaan vain, jos CN ei ole slot |
-| `GOAT_ROUTER` | bundlen `NOTES.md`-tiedoston `Router endpoint`, muuten `tls/router.example:7447` | mTLS-reititin |
+| `GOAT_ROUTER` | bundlen `NOTES.md`-tiedoston `Router endpoint` | mTLS-reititin `tls/<reititin>:<portti>`. Pakollinen, jos bundlessa ei ole `NOTES.md`-tiedostoa; ilman kumpaakaan relay pysähtyy käynnistyksessä |
 | `GOAT_LOCAL_ROUTER` | `tcp/localhost:7447` | Reititin, kun bundlea ei löydy |
 | `GOAT_LEASE_MS` | `60000` | Zenohin lease-aika; pitkä, koska välitetyt mesh-yhteydet takkuavat |
 

@@ -10,8 +10,12 @@ info:
     distances/errors in metres; delivery at-least-once; there is no delete message (markers go stale).
 servers:
   goat:
-    url: tls/router.example:7447
+    url: tls/{router}:7447
     protocol: zenoh
+    variables:
+      router:
+        description: Router name from the onboarding bundle's NOTES.md ("Router endpoint").
+        default: router.example
     description: mTLS; writes limited to our org prefix.
 channels:
   "{org}/{system}/heartbeat/v1":

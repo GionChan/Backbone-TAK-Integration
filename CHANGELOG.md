@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.4 — 2026-11-05
+
+### Relay
+
+- No built-in fabric router: the router comes from `GOAT_ROUTER` or the "Router endpoint" line of
+  the bundle's `NOTES.md`. With a certificate but neither, the relay stops at start with the fix,
+  and `doctor.py` reports it. Copy `NOTES.md` together with the certificate.
+
+### Deployment
+
+- Compose: the Docker Desktop host mapping takes the router name and mesh IP from
+  `EFDI_ROUTER_HOST` and `EFDI_ROUTER_IP`; there is no default address.
+- `make_relay_package.py` stops when neither `--router` nor the bundle's `NOTES.md` names a router.
+- `demo/setup-certs.ps1` copies `NOTES.md`; the demo launcher reads the router from it.
+
+### Demo
+
+- The live map has no button for an external portal.
+
 ## 1.1.3 — 2026-11-05
 
 ### Relay

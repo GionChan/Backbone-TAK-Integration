@@ -68,7 +68,21 @@ class IdentityTests(unittest.TestCase):
             os.environ["GOAT_ROUTER"] = "tls/override:7447"
             self.assertEqual(identity.router_for(cert), "tls/override:7447")
         os.environ.pop("GOAT_ROUTER")
-        self.assertEqual(identity.router_for(None), identity.DEFAULT_ROUTER)
+        self.assertEqual(identity.router_for(None), "")  # no built-in default
+
+    def test_runtime_refuses_a_certificate_without_router(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            _bundle(Path(tmp), SLOT)
+            env = {k: v for k, v in os.environ.items() if k != "GOAT_ROUTER"}
+            env["GOAT_CERT_DIR"] = tmp
+            relay = str(Path(__file__).resolve().parent.parent / "relay")
+            r = subprocess.run([sys.executable, "-c", "import goat_connect"], cwd=relay, env=env,
+                               capture_output=True, text=True, timeout=60)
+        if "No module named 'zenoh'" in r.stderr:
+            self.skipTest("eclipse-zenoh not installed")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("no fabric router", r.stderr)
 
     def test_downloaded_bundle_used_only_when_unambiguous(self):
         with tempfile.TemporaryDirectory() as home, \

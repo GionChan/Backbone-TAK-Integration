@@ -8,8 +8,8 @@ A bundle directory holds `<prefix>-cert.pem`, `<prefix>-key.pem` and a CA root (
 
 Bundles are searched in GOAT_CERT_DIR (only there when set), else <repo>/certs, ./certs,
 /certs, and finally ~/Downloads/efdi-onboarding-* (used only when exactly one holds a bundle).
-The router endpoint is GOAT_ROUTER, else the "Router endpoint:" line of the bundle's NOTES.md,
-else the EFDI default.
+The router endpoint is GOAT_ROUTER, else the "Router endpoint:" line of the bundle's NOTES.md.
+There is no built-in default: the onboarding bundle names the router.
 
 Used by goat_connect.py (runtime), doctor.py and tools/make_relay_package.py (no zenoh).
 """
@@ -22,7 +22,6 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _SLOT_RE = re.compile(r"^[0-9a-f]{32}$")
 _CA_NAMES = ("efdi-ca-root.pem", "ca-root.pem", "ca-roots.pem")
 _ROUTER_RE = re.compile(r"Router endpoint:\s*(tls/\S+)")
-DEFAULT_ROUTER = "tls/router.example:7447"
 
 
 def cert_dirs() -> list:
@@ -72,7 +71,7 @@ def resolve_bundle():
 
 
 def router_for(cert_path) -> str:
-    """mTLS router endpoint: GOAT_ROUTER (tls/), else the bundle's NOTES.md, else the default."""
+    """mTLS router endpoint: GOAT_ROUTER (tls/), else the bundle's NOTES.md, else ""."""
     env = os.environ.get("GOAT_ROUTER", "")
     if env.startswith("tls/"):
         return env
@@ -84,7 +83,7 @@ def router_for(cert_path) -> str:
                 return m.group(1)
         except OSError:
             pass
-    return DEFAULT_ROUTER
+    return ""
 
 
 def cert_cn(cert_path: str) -> str:

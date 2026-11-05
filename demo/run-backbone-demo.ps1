@@ -46,18 +46,24 @@ if (-not $haveCert) {
     & (Join-Path $PSScriptRoot "setup-certs.ps1") -BundleDir $BundleDir
 }
 
-# 2. backbone router reachable over the mesh?
+# 2. backbone router (GOAT_ROUTER, else the bundle's NOTES.md) reachable over the mesh?
+$endpoint = & python -c "import sys; sys.path.insert(0, 'relay'); import identity; print(identity.router_for(identity.resolve_bundle()[0]))"
+if ($endpoint -notmatch '^tls/(.+):(\d+)$') {
+    throw "no fabric router: set GOAT_ROUTER=tls/<router>:<port> or put the bundle's NOTES.md in .\certs\"
+}
+$routerHost, $routerPort = $Matches[1], [int]$Matches[2]
 try {
-    $ip = [System.Net.Dns]::GetHostAddresses("router.example")[0].IPAddressToString
+    $ip = [System.Net.Dns]::GetHostAddresses($routerHost)[0].IPAddressToString
 } catch {
-    throw "cannot resolve router.example - is NetBird up? (netbird status)"
+    throw "cannot resolve $routerHost - is NetBird up? (netbird status)"
 }
-if (-not (Test-NetConnection -ComputerName $ip -Port 7447 -WarningAction SilentlyContinue).TcpTestSucceeded) {
-    throw "backbone router ${ip}:7447 unreachable - check 'netbird status' (Management: Connected, Nameservers 1/1)"
+if (-not (Test-NetConnection -ComputerName $ip -Port $routerPort -WarningAction SilentlyContinue).TcpTestSucceeded) {
+    throw "backbone router ${ip}:${routerPort} unreachable - check 'netbird status' (Management: Connected, Nameservers 1/1)"
 }
-Write-Host "==> backbone router reachable at ${ip}:7447" -ForegroundColor Green
+Write-Host "==> backbone router reachable at ${ip}:${routerPort}" -ForegroundColor Green
 
 # 3. relay + demo stack (demo settings; the product defaults live in docker-compose.yml)
+$env:EFDI_ROUTER_HOST = $routerHost
 $env:EFDI_ROUTER_IP = $ip
 $env:TAK_UDP_TARGETS = "host.docker.internal:6969,host.docker.internal:4242"
 $env:TAK_INGEST = "1"

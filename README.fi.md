@@ -37,7 +37,7 @@ omaan namespaceensa, joten sitä ei voi sekoittaa oikeaan sensoridataan.
 Edellytykset: NetBird-yhteys EFDI-meshiin, Docker ja oma onboarding-bundle.
 
 ```bash
-mkdir certs && cp /polku/bundleen/{*-cert.pem,*-key.pem,efdi-ca-root.pem} certs/
+mkdir certs && cp /polku/bundleen/{*-cert.pem,*-key.pem,efdi-ca-root.pem,NOTES.md} certs/
 cp .env.example .env           # valinnainen: TAK-kohteet, järjestelmänimi, PLI
 docker compose up -d           # käynnistää pelkän relayn
 docker compose exec tak-relay python3 relay/doctor.py   # esitarkistus: kertoo ongelman ja korjauksen

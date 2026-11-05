@@ -7,7 +7,7 @@ settings go in ONE transport/link/tls JSON blob or the client cert is silently n
 Env:
   GOAT_CERT / GOAT_KEY / GOAT_CA   explicit PEM paths  (else GOAT_CERT_DIR, ./certs, /certs)
   GOAT_ORG (or EDGE_ORG)           org slot (default: the cert CN)
-  GOAT_ROUTER                      mTLS router (default the EFDI router below)
+  GOAT_ROUTER                      mTLS router (default: the bundle's NOTES.md)
   GOAT_LOCAL_ROUTER                plain-TCP router when no bundle is found
 """
 from __future__ import annotations
@@ -27,7 +27,7 @@ if os.environ.get("EDGE_ORG") and not os.environ.get("GOAT_ORG"):
 _CERT, _KEY, _CA = identity.resolve_bundle()
 ORG = identity.org_for(_CERT) or "local"
 _r = os.environ.get("GOAT_ROUTER", "")
-ROUTER = _r if _r.startswith("tls/") else "tls/router.example:7447"
+ROUTER = identity.router_for(_CERT)  # GOAT_ROUTER, else the bundle's NOTES.md
 LOCAL_ROUTER = os.environ.get("GOAT_LOCAL_ROUTER") or (_r if _r.startswith("tcp/") else "tcp/localhost:7447")
 
 
@@ -39,6 +39,8 @@ def open_session():
     conf.insert_json5("transport/unicast/open_timeout", "60000")
     conf.insert_json5("transport/link/tx/lease", os.environ.get("GOAT_LEASE_MS", "60000"))
     if cert and key and ca:
+        if not ROUTER:
+            raise SystemExit("no fabric router: set GOAT_ROUTER=tls/<router>:<port> or add the bundle's NOTES.md")
         conf.insert_json5("connect/endpoints", json.dumps([ROUTER]))
         conf.insert_json5("transport/link/tls", json.dumps({
             "root_ca_certificate": ca,

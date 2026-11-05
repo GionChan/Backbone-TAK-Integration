@@ -2,7 +2,7 @@
 #
 #   .\demo\setup-certs.ps1 -BundleDir C:\path\to\unpacked-bundle
 #
-# The bundle holds <prefix>-cert.pem, <prefix>-key.pem and the CA root (efdi-ca-root.pem).
+# The bundle holds <prefix>-cert.pem, <prefix>-key.pem, the CA root (efdi-ca-root.pem) and NOTES.md.
 # File names are kept: the relay reads the org slot from the certificate itself.
 param(
     [Parameter(Mandatory = $true)][string]$BundleDir,
@@ -29,5 +29,9 @@ if (-not $ca) { throw "No CA root (efdi-ca-root.pem) in $BundleDir" }
 New-Item -ItemType Directory -Force -Path $CertsOut | Out-Null
 Copy-Item $cert, $key $CertsOut -Force
 Copy-Item $ca (Join-Path $CertsOut "efdi-ca-root.pem") -Force
+# NOTES.md names the fabric router ("Router endpoint:"); there is no built-in default.
+$notes = Join-Path $BundleDir "NOTES.md"
+if (Test-Path $notes) { Copy-Item $notes $CertsOut -Force }
+else { Write-Warning "no NOTES.md in ${BundleDir}: set GOAT_ROUTER=tls/<router>:<port>" }
 Write-Host "==> certs ready in $CertsOut" -ForegroundColor Green
 Get-ChildItem $CertsOut | Select-Object Name, Length | Format-Table -AutoSize

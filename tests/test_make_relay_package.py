@@ -47,7 +47,7 @@ def _fake_cert_dir(tmp) -> Path:
 def _build(tmp, **overrides) -> str:
     kwargs = dict(system="unit-test-device", cert_dir=str(_fake_cert_dir(tmp)),
                   out=str(Path(tmp) / "out.zip"), tak_host="127.0.0.1", tak_udp_port=6969,
-                  tak_port=8087, tak_ingest=True, tak_udp_in_port=6971, router=pkg._ROUTER_MTLS)
+                  tak_port=8087, tak_ingest=True, tak_udp_in_port=6971, router="tls/router.example:7447")
     kwargs.update(overrides)
     pkg.build_package(**kwargs)
     return kwargs["out"]
@@ -185,6 +185,12 @@ class TemplateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, self.assertRaises(SystemExit):
             _build(tmp, system=None)
 
+    def test_no_router_is_an_error(self):
+        # No built-in router: without --router or the bundle's NOTES.md the build stops.
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"GOAT_ROUTER": ""}), \
+                self.assertRaisesRegex(SystemExit, "no fabric router"):
+            _build(tmp, router=None)
+
     def test_notes_travel_with_the_certificate(self):
         with tempfile.TemporaryDirectory() as tmp:
             d = _fake_cert_dir(tmp)
@@ -294,7 +300,7 @@ class LanguageTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 pkg.build_package(system="x", cert_dir=tmp, out=str(Path(tmp) / "o.zip"),
                                    tak_host="127.0.0.1", tak_udp_port=6969, tak_port=8087,
-                                   tak_ingest=True, tak_udp_in_port=6971, router=pkg._ROUTER_MTLS)
+                                   tak_ingest=True, tak_udp_in_port=6971, router="tls/router.example:7447")
 
     def test_rebuild_overwrites_cleanly(self):
         # A device re-shipped with new settings (e.g. after editing --tak-port) must not

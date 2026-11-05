@@ -1,13 +1,13 @@
 """Zenoh session config for the EFDI goat fabric (mTLS) with a local-router fallback.
 
-Public API: make_config(), ORG, KEY_PREFIX, ROUTER, ROUTER_MTLS.
+Public API: make_config(), ORG, KEY_PREFIX, ROUTER, LOCAL_ROUTER.
 
 Identity (see identity.py): GOAT_CERT/GOAT_KEY/GOAT_CA, else one bundle in GOAT_CERT_DIR,
 <repo>/certs, ./certs or /certs. ORG = GOAT_ORG, else the cert CN.
 
 Endpoints:
-  GOAT_ROUTER        mTLS fabric router. Default: the "Router endpoint" in the bundle's NOTES.md,
-                     else the EFDI router (identity.DEFAULT_ROUTER).
+  GOAT_ROUTER        mTLS fabric router. Default: the "Router endpoint" in the bundle's NOTES.md.
+                     With a certificate but neither of these the process exits.
   GOAT_LOCAL_ROUTER  plain-TCP router used when no bundle is found (default tcp/localhost:7447).
                      For backward compatibility a tcp/ value in GOAT_ROUTER is used here too.
 """
@@ -18,7 +18,6 @@ import zenoh
 
 import identity
 
-ROUTER_MTLS = identity.DEFAULT_ROUTER
 
 _CERT, _KEY, _CA = identity.resolve_bundle()
 _env_router = os.environ.get("GOAT_ROUTER", "")
@@ -32,6 +31,9 @@ KEY_PREFIX = f"{ORG}/sensor/v1"
 if _CERT and ORG == "local":
     # Writes outside your slot are silently dropped by the fabric, so fail loudly here instead.
     raise SystemExit(f"cannot determine the org slot from {_CERT}: set GOAT_ORG=<your slot id>")
+if _CERT and not ROUTER:
+    raise SystemExit(f"no fabric router: {os.path.dirname(_CERT)} has no NOTES.md with a 'Router endpoint:' "
+                     "line; set GOAT_ROUTER=tls/<router>:<port> from your onboarding bundle")
 
 
 def make_config():

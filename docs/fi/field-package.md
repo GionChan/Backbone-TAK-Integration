@@ -25,7 +25,7 @@ python tools/make_relay_package.py --system field-relay-01                   # �
 | `--tak-port` | `8087` | TCP-striimin portti |
 | `--tak-udp-in-port` | `6971` | UDP-portti päätteen PLI:lle |
 | `--no-ingest` | pois | Älä julkaise päätteen omaa sijaintia |
-| `--router` | bundlen `NOTES.md`, muuten EFDI-reititin | Zenohin mTLS-reititin |
+| `--router` | bundlen `NOTES.md` (pakollinen ilman sitä) | Zenohin mTLS-reititin |
 | `--no-bundled-python` | pois | Jätä Python pois (pienempi ZIP). Laite tarvitsee silloin Python 3.10:n ja verkkoyhteyden asennukseen |
 
 Paketissa ovat `app/` (relayn moduulit muuttamattomina), `certs/`, `device.env` (kaikki

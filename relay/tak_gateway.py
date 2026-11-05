@@ -69,7 +69,7 @@ import symbology  # noqa: E402
 import tak_links  # noqa: E402
 import video_relay  # noqa: E402
 
-__version__ = "1.1.3"
+__version__ = "1.1.4"
 START = time.time()
 GATEWAY_SYSTEM = os.environ.get("GATEWAY_SYSTEM", "tak-gateway")
 UDP_IN_PORT = int(os.environ.get("TAK_UDP_IN_PORT", "0"))

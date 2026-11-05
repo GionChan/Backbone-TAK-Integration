@@ -178,7 +178,6 @@ _HTML_SRC = """<!DOCTYPE html>
     <div id="controls">
       <button class="ctrl-btn" onclick="fitAll()">&#8982; FIT ALL</button>
       <button class="ctrl-btn" id="tail-btn" onclick="toggleTails()">&#9760; TAILS ON</button>
-      <button class="ctrl-btn" onclick="window.open('https://portal.example','_blank')">&#128268; PORTAL</button>
     </div>
   </div>
 </div>

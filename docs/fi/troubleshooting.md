@@ -14,7 +14,8 @@ JSON-muodossa: `reasons` kertoo, mikä on vialla, ja `counters` näyttää, minn
 | Oire | Todennäköinen syy | Korjaus |
 | --- | --- | --- |
 | `fabric link down`, `/healthz` 503 | Mesh alhaalla tai reititin ei vastaa | `netbird status`: Management ja Signal yhdistettyinä, nimipalvelimet 1/1. `goat doctor` |
-| Reitittimen nimi ei ratkea | Ei meshissä tai NetBirdin DNS ei ole käytössä | Yhdistä NetBird uudelleen. Docker Desktopissa aseta `EFDI_ROUTER_IP` (mesh-IP isännän `nslookup`-komennolla) |
+| Reitittimen nimi ei ratkea | Ei meshissä tai NetBirdin DNS ei ole käytössä | Yhdistä NetBird uudelleen. Docker Desktopissa aseta `EFDI_ROUTER_HOST` (reitittimen nimi) ja `EFDI_ROUTER_IP` (sen mesh-IP isännän `nslookup`-komennolla) |
+| Päättyy virheeseen `no fabric router` | Bundlessa ei ole `NOTES.md`-tiedostoa, jossa on `Router endpoint:` | Kopioi onboarding-bundlen `NOTES.md` kansioon `certs/` tai aseta `GOAT_ROUTER=tls/<reititin>:<portti>` |
 | Lokissa toistuu `fabric unavailable (…)` | Vanhentunut tai väärä sertifikaatti, väärä reititin | `goat profile show`; tarkista `certs/`-kansion bundle; aseta `GOAT_ROUTER` bundlen mukaan |
 | Päättyy virheeseen `cannot determine the org slot` | Sertifikaatin CN ei ole slot | Aseta `GOAT_ORG=<slotin tunniste>` |
 | `need exactly one … pair` tai bundlea ei löydy | Hakemistossa on useita identiteettejä | Pidä yksi sertifikaatti- ja avainpari hakemistoa kohden tai aseta `GOAT_CERT`/`GOAT_KEY`/`GOAT_CA` |

@@ -13,7 +13,8 @@ A running relay shows its state at <http://localhost:8088/>. `/status` gives the
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | `fabric link down`, `/healthz` 503 | Mesh down or router unreachable | `netbird status`: Management and Signal connected, nameservers 1/1. `goat doctor` |
-| Router name does not resolve | Not on the mesh, or NetBird DNS not used | Reconnect NetBird. In Docker Desktop set `EFDI_ROUTER_IP` (mesh IP from `nslookup` on the host) |
+| Router name does not resolve | Not on the mesh, or NetBird DNS not used | Reconnect NetBird. In Docker Desktop set `EFDI_ROUTER_HOST` (the router name) and `EFDI_ROUTER_IP` (its mesh IP from `nslookup` on the host) |
+| Exits with `no fabric router` | The bundle has no `NOTES.md` with `Router endpoint:` | Copy `NOTES.md` from the onboarding bundle into `certs/`, or set `GOAT_ROUTER=tls/<router>:<port>` |
 | Relay logs `fabric unavailable (…)` repeatedly | Expired or wrong certificate, wrong router | `goat profile show`; check the bundle in `certs/`; set `GOAT_ROUTER` from the bundle |
 | Exits with `cannot determine the org slot` | Certificate CN is not the slot | Set `GOAT_ORG=<slot id>` |
 | `need exactly one … pair` / no bundle found | Several identities in one directory | Keep one cert/key pair per directory, or set `GOAT_CERT`/`GOAT_KEY`/`GOAT_CA` |

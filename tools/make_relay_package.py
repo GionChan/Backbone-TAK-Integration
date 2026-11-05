@@ -37,8 +37,6 @@ REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 sys.path.insert(0, os.path.join(REPO_ROOT, "relay"))
 import identity  # noqa: E402  (stdlib only: the build machine needs no zenoh)
 
-_ROUTER_MTLS = identity.DEFAULT_ROUTER
-
 # tak_gateway.py's own sys.path.insert(dirname(__file__)) means every sibling
 # module just needs to sit next to it in the package -- no install step for
 # our own code, only the one third-party dependency (eclipse-zenoh).
@@ -242,6 +240,9 @@ def build_package(system, cert_dir, out: str, tak_host: str, tak_udp_port: int,
             raise SystemExit(f"ERROR: {f} not found")
     if not template:
         router = router or identity.router_for(cert)
+        if not router:
+            raise SystemExit("ERROR: no fabric router: the bundle has no NOTES.md with 'Router endpoint:'; "
+                             "pass --router tls/<router>:<port> from your onboarding bundle")
 
     def line(key: str, value) -> str:
         return f"{key}={value}" if value else f"# {key}="
@@ -322,7 +323,7 @@ def main() -> None:
     p.add_argument("--tak-server", help="mode server: TAK Server host[:port]")
     p.add_argument("--tak-p12", help="mode server: relay client certificate .p12 (copied to certs/tak/)")
     p.add_argument("--tak-trust-p12", help="mode server: TAK Server truststore .p12 (copied to certs/tak/)")
-    p.add_argument("--router", default=None, help="Zenoh router endpoint (default: the bundle's NOTES.md, else the EFDI router)")
+    p.add_argument("--router", default=None, help="Zenoh router endpoint (default: the bundle's NOTES.md)")
     p.add_argument("--no-bundled-python", action="store_true",
                    help="do not include Python; the device then needs Python 3.10+ and network at install")
     args = p.parse_args()

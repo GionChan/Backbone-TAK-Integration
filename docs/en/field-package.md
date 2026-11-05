@@ -25,7 +25,7 @@ python tools/make_relay_package.py --system field-relay-01                   # â
 | `--tak-port` | `8087` | TCP stream port |
 | `--tak-udp-in-port` | `6971` | UDP port for PLI from the terminal |
 | `--no-ingest` | off | Do not publish the terminal's own position |
-| `--router` | bundle's `NOTES.md`, else EFDI router | Zenoh mTLS router |
+| `--router` | bundle's `NOTES.md` (required without it) | Zenoh mTLS router |
 | `--no-bundled-python` | off | Leave Python out (smaller ZIP); the device then needs Python 3.10+ and network at install |
 
 The package contains `app/` (the relay modules, unchanged), `certs/`, `device.env` (all settings,

@@ -10,7 +10,7 @@ at the edge shows up on WinTAK/ATAK straight from the fabric, with no app-side
 processing.
 
 ```
-                       EFDI Zenoh backbone  (mTLS, router.example:7447)
+                       EFDI Zenoh backbone  (mTLS, router from the bundle's NOTES.md)
   frame_publisher ─▶ <ORG>/imagery/v1/<cam>  ─┐
    (synthetic EO)                             │  ┌──────────── edge_node.py ─────────────┐
                                               ├─▶│ decode JPEG → detector → geolocate →  │─▶ <ORG>/tak/cot/v1/<uid>   (CoT 2.0 XML)

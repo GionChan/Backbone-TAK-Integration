@@ -38,7 +38,7 @@ its own namespace, so it cannot be mistaken for real sensor data.
 Prerequisites: NetBird connected to the EFDI mesh, Docker, and your onboarding bundle.
 
 ```bash
-mkdir certs && cp /path/to/bundle/{*-cert.pem,*-key.pem,efdi-ca-root.pem} certs/
+mkdir certs && cp /path/to/bundle/{*-cert.pem,*-key.pem,efdi-ca-root.pem,NOTES.md} certs/
 cp .env.example .env           # optional: adjust TAK targets, system name, ingest
 docker compose up -d           # starts the relay only
 docker compose exec tak-relay python3 relay/doctor.py   # preflight: names any problem and its fix
