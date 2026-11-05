@@ -32,9 +32,10 @@ COPY relay/ relay/
 RUN useradd --system --uid 10001 --no-create-home tak
 USER tak
 ENV PYTHONUNBUFFERED=1
-# Inside the container the HTTP port must listen on all interfaces for port publishing to work;
-# docker-compose.yml publishes it on the host's 127.0.0.1 only.
-ENV GATEWAY_HTTP_BIND=0.0.0.0
+# The HTTP port (no auth) listens on 127.0.0.1 unless told otherwise, also in `docker run` and with
+# the host network. docker-compose.yml sets 0.0.0.0 inside the container and publishes the port
+# on the host's 127.0.0.1 only. HEALTHCHECK works either way.
+ENV GATEWAY_HTTP_BIND=127.0.0.1
 EXPOSE 8087 8088 6971/udp 8554
 # /healthz is 200 only while the fabric link is up.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 CMD python3 -c \

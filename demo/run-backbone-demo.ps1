@@ -62,6 +62,8 @@ $env:EFDI_ROUTER_IP = $ip
 $env:TAK_UDP_TARGETS = "host.docker.internal:6969,host.docker.internal:4242"
 $env:TAK_INGEST = "1"
 $env:GATEWAY_VIDEO = "1"
+# RTSP address in the video markers: TAK apps on this machine. For phones, set your LAN IP first.
+if (-not $env:GATEWAY_VIDEO_HOST) { $env:GATEWAY_VIDEO_HOST = "127.0.0.1" }
 $svc = if ($NoSwarm) { @("tak-relay", "zenoh-router", "live-map") } else { @() }
 docker compose --profile demo up -d --build @svc
 Write-Host "==> relay + demo stack up  (map http://localhost:8080, relay status http://localhost:8088/status)" -ForegroundColor Green

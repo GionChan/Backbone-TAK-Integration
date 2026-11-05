@@ -96,4 +96,10 @@ mutta heartbeatia ei lähetetä.
 - [ ] `curl localhost:8088/status` → `"healthy": true`.
 - [ ] TAKissa kutsutunnukset alkavat sanalla `EXERCISE`.
 - [ ] Edge-AI-demo: `EDGE_COT_AFFIL=u`, jotta sen merkkejä ei näytetä varmistettuina vihollisina.
+- [ ] Oikeilla varmenteilla demo julkaisee jaettuun fabriciin. Kartta (`:8080`) näkyy verkkoon,
+      jotta muut voivat seurata sitä. `/inject` hyväksyy vain JSONin, joten verkkosivu ei voi
+      syöttää jälkiä, mutta kuka tahansa verkossa voi. Aja demo luotetussa verkossa. Edge-AI:n
+      rajapinta (`:8090`) julkaistaan vain tälle koneelle; aseta `EDGE_API_TOKEN`.
+- [ ] Video: `GATEWAY_VIDEO_HOST` on TAKin videomerkkien osoite. Käynnistin asettaa arvon
+      `127.0.0.1` (tämän koneen TAK-sovellukset); puhelimia varten aseta ensin lähiverkon osoite.
 - [ ] Lopuksi `.\demo\run-backbone-demo.ps1 -Stop`, jotta simuloitua dataa ei jää virtaamaan.

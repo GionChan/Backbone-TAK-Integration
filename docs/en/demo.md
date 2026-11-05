@@ -92,4 +92,10 @@ fabric, without the heartbeat.
 - [ ] `curl localhost:8088/status` → `"healthy": true`.
 - [ ] Callsigns in TAK start with `EXERCISE`.
 - [ ] Edge-AI demo: `EDGE_COT_AFFIL=u`, so its markers are not shown as confirmed hostiles.
+- [ ] With real certificates the demo publishes to the shared fabric. The map (`:8080`) is
+      reachable from the network so others can watch it; `/inject` accepts only JSON, so a web
+      page cannot inject tracks, but anyone on the network can. Run it on a network you trust.
+      The edge-AI API (`:8090`) is published on this machine only; set `EDGE_API_TOKEN`.
+- [ ] Video: `GATEWAY_VIDEO_HOST` is the address in the TAK video markers. The launcher sets
+      `127.0.0.1` (TAK apps on this machine); for phones set your LAN address first.
 - [ ] `.\demo\run-backbone-demo.ps1 -Stop` afterwards, so simulated data does not keep flowing.

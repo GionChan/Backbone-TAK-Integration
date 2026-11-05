@@ -21,6 +21,7 @@ JSON-muodossa: `reasons` kertoo, mikä on vialla, ja `counters` näyttää, minn
 | Julkaisu "onnistuu", mutta kukaan ei saa viestiä | Avain on oman slotin ulkopuolella (hylätään hiljaa) | Julkaise vain polkuun `<slot>/…`; tarkista komennolla `goat flow <avain>` |
 | `/status` terve, mutta TAK ei näytä mitään | Väärä UDP-kohde, palomuuri tai TAK-tulo pois päältä | Dockerissa käytä osoitetta `host.docker.internal`, ei `127.0.0.1`. Avaa TAK-tulon portti. Tarkista `gateway_output_sent_total` |
 | Merkit ilmestyvät ja katoavat | Lähde lähettää vanhentuneita aikaleimoja tai kello on väärässä | Tarkista `gateway_cot_dropped_total{reason="already-stale"}`; synkronoi kello (NTP) |
+| Toimittajan merkit eivät näy, `gateway_cot_dropped_total{reason="not-one-event"}` tai `"not-utf8"` | Lähde lähettää useita tapahtumia yhdessä viestissä tai muuta kuin UTF-8-tekstiä | Pyydä toimittajalta yksi CoT-tapahtuma viestiä kohden UTF-8-muodossa |
 | `no backbone samples for …` | Tilatuilla avaimilla ei julkaista mitään | `GATEWAY_INGEST_ALL=1` näyttää kaikki valmistajat; katso `/streams` |
 | ATAK-yhteys katkeaa | Asiakas ei lukenut dataa 10 sekuntiin | Tarkoituksellinen suojaus; tarkista asiakkaan verkko |
 | `port is already allocated` | Jokin muu prosessi käyttää porttia 8087, 8088, 6971, 8554, 8080 tai 7447 | Pysäytä se tai vaihda porttimäärityksen isäntäpuoli |

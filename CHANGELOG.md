@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.1.3 — 2026-11-05
+
+### Relay
+
+- `adsb`, `alerts` and `roi` reach TAK again: they had no rate limiter and every message failed.
+- `/metrics` writes one `# TYPE` line per metric; before, Prometheus rejected the scrape as soon
+  as a metric had two labelled series.
+- CoT must be UTF-8 (or another ASCII-compatible encoding) with exactly one `<event>`. New drop
+  reasons `not-utf8` and `not-one-event`. A UDP or multicast datagram that holds more than one
+  event is dropped (`reason="multi-event-datagram"`).
+- TAK Server TLS: a truststore (`TAK_SERVER_TRUST_P12` or `TAK_SERVER_CA`) replaces the operating
+  system's public CAs instead of being added to them.
+- TAK Server link: one thread reads and writes the connection; sending and receiving give up
+  after 10 s without progress, and a link the server closed is noticed and reconnected.
+- `TAK_MAX_CLIENTS_PER_IP` (default 8) limits TCP clients per address.
+- A wrong number in `TAK_MAX_CLIENTS` or `TAK_MAX_CLIENTS_PER_IP` stops the relay with a
+  configuration error.
+- A warning at start and in `doctor.py` when `TAK_INGEST=1` runs in Docker without
+  `TAK_INGEST_UIDS`, and one log line per address whose PLI is dropped as `not-loopback`.
+
+### Demo
+
+- Live map: `/inject` accepts only `application/json` and sends no `Access-Control-Allow-Origin`;
+  numeric fields are checked, and values from the backbone are cleaned before the map shows them.
+- Edge-AI API: published on the host's `127.0.0.1` only; the token is compared in constant time.
+- The demo launcher sets `GATEWAY_VIDEO_HOST=127.0.0.1` when it is not set.
+
+### Deployment
+
+- Docker image: `GATEWAY_HTTP_BIND=127.0.0.1` by default; compose sets `0.0.0.0` in the container
+  and still publishes 8088 on the host's `127.0.0.1` only.
+- Compose: no default for `GATEWAY_VIDEO_HOST`; without it the video restream stays off instead of
+  sending TAK clients an address they cannot reach.
+- Release workflow: the image is built once into an OCI archive, each architecture is tested from
+  that archive, and the same archive is pushed.
+
 ## 1.1.2 — 2026-11-04
 
 ### Relay

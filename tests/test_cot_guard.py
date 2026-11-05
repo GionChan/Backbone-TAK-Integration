@@ -39,6 +39,24 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(g.validate_cot(b'<!DOCTYPE x [<!ENTITY a "b">]>' + event())[1], "dtd-not-allowed")
         self.assertEqual(g.validate_cot(event(extra="<x>" + "a" * 70000 + "</x>"))[1], "too-large")
 
+    def test_rejects_non_utf8(self):
+        dtd = '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE event [<!ENTITY e "x">]>'
+        for data in (dtd.encode("utf-16") + event(),           # BOM
+                     dtd.encode("utf-16-le"),                  # no BOM: NUL bytes
+                     event().replace(b'version="1.0"?>', b'version="1.0" encoding="UTF-16"?>', 1)):
+            self.assertEqual(g.validate_cot(data)[1], "not-utf8")
+        utf8 = event().replace(b'version="1.0"?>', b'version="1.0" encoding="UTF-8"?>', 1)
+        self.assertEqual(g.validate_cot(utf8), (True, ""))
+
+    def test_exactly_one_event(self):
+        # A second event hidden in a comment, CDATA or a processing instruction would come out as an
+        # event of its own when a stream is split at "</event>".
+        hidden = event(uid="VICTIM").split(b"?>", 1)[1].decode()
+        self.assertEqual(g.validate_cot(f"<!-- {hidden} -->{hidden}".replace('"VICTIM"', '"decoy"', 1)
+                                        .encode())[1], "not-one-event")
+        for wrap in (f"<!-- {hidden} -->", f"<![CDATA[{hidden}]]>", f"<?pi {hidden} ?>"):
+            self.assertEqual(g.validate_cot(event(extra=f"<detail>{wrap}</detail>"))[1], "not-one-event")
+
     def test_rejects_dtd_after_padding(self):
         # A long comment first must not push the DTD past the check.
         padded = b"<!--" + b"x" * 5000 + b'--><!DOCTYPE event [<!ENTITY e "x">]>' + event()

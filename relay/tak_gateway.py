@@ -46,6 +46,7 @@ import ipaddress
 import json
 import os
 import re
+import select
 import socket
 import sys
 import threading
@@ -68,7 +69,7 @@ import symbology  # noqa: E402
 import tak_links  # noqa: E402
 import video_relay  # noqa: E402
 
-__version__ = "1.1.2"
+__version__ = "1.1.3"
 START = time.time()
 GATEWAY_SYSTEM = os.environ.get("GATEWAY_SYSTEM", "tak-gateway")
 UDP_IN_PORT = int(os.environ.get("TAK_UDP_IN_PORT", "0"))
@@ -94,16 +95,52 @@ except tak_links.ConfigError as _exc:  # reported by main(); keeps the module im
 # Link kinds: "local" (UDP input, TCP server clients), "lan" (multicast group), "server" (TAK Server).
 INGEST_FROM = _csv_set("TAK_INGEST_FROM", tak_links.default_ingest_from(MODE))
 INGEST_UIDS = _csv_set("TAK_INGEST_UIDS")            # empty = devices on this machine only ("lan" needs the list)
-MAX_TCP_CLIENTS = int(os.environ.get("TAK_MAX_CLIENTS", "64"))
+_CONFIG_ERRORS = []  # reported by main(), like _MODE_ERROR, so the module stays importable
+
+
+def _int_env(name: str, default: int, minimum: int = 1) -> int:
+    raw = os.environ.get(name, "").strip() or str(default)
+    try:
+        value = int(raw)
+    except ValueError:
+        value = None
+    if value is None or value < minimum:
+        _CONFIG_ERRORS.append(f"{name}={raw!r} must be a whole number >= {minimum}")
+        return default
+    return value
+
+
+MAX_TCP_CLIENTS = _int_env("TAK_MAX_CLIENTS", 64)
+MAX_TCP_CLIENTS_PER_IP = _int_env("TAK_MAX_CLIENTS_PER_IP", 8)
+
+
+_logged_once: set = set()
+_logged_once_lock = threading.Lock()
+
+
+def _log_once(key: str, msg: str) -> None:
+    """log(msg) the first time key is seen (bounded, so a flood of addresses cannot grow it)."""
+    with _logged_once_lock:
+        if key in _logged_once or len(_logged_once) >= 1000:
+            return
+        _logged_once.add(key)
+    log(msg)
+
+
+def _origin_ip(origin: str) -> str:
+    """"1.2.3.4" from "udp_in@1.2.3.4" or "tcp_server:8087@1.2.3.4:5678" ("" if none)."""
+    m = re.search(r"@([0-9.]+)", origin)
+    return m.group(1) if m else ""
 
 
 def _from_loopback(origin: str) -> bool:
-    """True when origin ("udp_in@1.2.3.4", "tcp_server:8087@1.2.3.4:5678") is this machine."""
-    m = re.search(r"@([0-9.]+)", origin)
+    """True when origin is this machine."""
     try:
-        return bool(m) and ipaddress.ip_address(m.group(1)).is_loopback
+        return ipaddress.ip_address(_origin_ip(origin)).is_loopback
     except ValueError:
         return False
+
+
 # Added to every CoT the relay sends, so no relay re-publishes what a relay put on TAK.
 RELAY_TAG = b"<__efdi_relay/>"
 _ECHO_S = 60.0
@@ -121,8 +158,9 @@ _SKIP_KEY_PARTS = ("video", "asterix-raw", "keyframe")
 # for genuine image bytes (their first byte matches none of xml/json/protobuf), so the keyword added no safety.
 _MIN_INTERVAL_S = {"xml": 0.5, "geotrack": 1.0, "consilium": 1.0, "mavlink": 1.0,
                    "hymots": float(os.environ.get("GATEWAY_HYMOTS_INTERVAL_S", "10")),
-                   "orion": 2.0, "proto": 1.0}
-_src_limiters = {k: cot_guard.RateLimiter(1.0 / v) for k, v in _MIN_INTERVAL_S.items()}
+                   "orion": 2.0, "adsb": 1.0, "alerts": 5.0, "roi": 1.0, "proto": 1.0}
+# One limiter per recognised source; a source without its own interval gets 1 s.
+_src_limiters = {k: cot_guard.RateLimiter(1.0 / _MIN_INTERVAL_S.get(k, 1.0)) for k in bc.ALL_SOURCES}
 _seen: dict = {}
 _seen_lock = threading.Lock()
 STREAMS = stream_view.StreamStats(gc.ORG)
@@ -242,6 +280,8 @@ def ingest_event(ev: bytes, origin: str, kind: str = "local") -> None:
     # could otherwise put positions on the fabric under the org's identity.
     if kind == "local" and not INGEST_UIDS and not _from_loopback(origin):
         inc('gateway_ingest_dropped_total{reason="not-loopback"}')
+        _log_once(_origin_ip(origin), f"PLI from {origin} not published: not this machine and "
+                  "TAK_INGEST_UIDS is empty (list the device uid to publish it)")
         return
     ok, reason = cot_guard.validate_cot(ev)
     if not ok:
@@ -323,6 +363,7 @@ class _TcpClient:
         self.q = collections.deque(maxlen=queue_len)
         self.cv = threading.Condition()
         self.closed = False
+        self.ip = ""
         threading.Thread(target=self._write, daemon=True).start()
 
     def send(self, data: bytes) -> bool:
@@ -393,13 +434,19 @@ class TcpServerOutput:
             except OSError:
                 return
             with self.lock:
-                full = len(self.clients) >= MAX_TCP_CLIENTS
-            if full:
+                same_ip = sum(1 for c in self.clients if c.ip == addr[0])
+                why = (f"{MAX_TCP_CLIENTS} clients already (TAK_MAX_CLIENTS)"
+                       if len(self.clients) >= MAX_TCP_CLIENTS else
+                       f"{MAX_TCP_CLIENTS_PER_IP} clients from this address (TAK_MAX_CLIENTS_PER_IP)"
+                       if same_ip >= MAX_TCP_CLIENTS_PER_IP else "")
+            if why:
+                # Per address too, so one host holding idle connections cannot lock out the others.
                 conn.close()
                 inc(f'gateway_output_rejected_total{{output="{self.name}"}}')
-                log(f"{self.name}: refused {addr[0]}:{addr[1]}, {MAX_TCP_CLIENTS} clients already (TAK_MAX_CLIENTS)")
+                log(f"{self.name}: refused {addr[0]}:{addr[1]}, {why}")
                 continue
             client = _TcpClient(conn, f"{self.name}@{addr[0]}:{addr[1]}", self._forget)
+            client.ip = addr[0]
             with self.lock:
                 self.clients.append(client)
                 total = len(self.clients)
@@ -442,14 +489,37 @@ class TcpClientOutput:
         self.q = collections.deque(maxlen=int(cfg.get("queue", 1000)))
         self.cv = threading.Condition()
         self.connected = False
+        self.stall_s = float(cfg.get("stall_s", 10.0))
         threading.Thread(target=self._run, daemon=True).start()
 
     def _connect(self):
         s = socket.create_connection((self.cfg["host"], int(self.cfg["port"])), timeout=10)
         if self.ctx is not None:
             s = self.ctx.wrap_socket(s, server_hostname=self.cfg["host"])
-        s.settimeout(None)
+        s.settimeout(self.stall_s)  # a send or receive that makes no progress drops the link
         return s
+
+    def _serve(self, sock) -> None:
+        """Send queued CoT and read what the server sends, both from this one thread: an SSL socket
+        must not be read and written from two threads at once."""
+        buf = bytearray()
+        while True:
+            with self.cv:
+                if not self.q:
+                    self.cv.wait(0.2)
+                data = self.q.popleft() if self.q else None
+            if data is not None:
+                sock.sendall(data)
+                inc(f'gateway_output_sent_total{{output="{self.name}"}}')
+            # pending(): bytes the SSL layer has already decrypted, invisible to select().
+            pending = sock.pending() if hasattr(sock, "pending") else 0
+            if pending or select.select([sock], [], [], 0)[0]:
+                chunk = sock.recv(65536)
+                if not chunk:
+                    raise OSError("closed by the server")
+                buf.extend(chunk)
+                for ev in core.split_cot_stream(buf):
+                    ingest_event(ev, self.name, "server")
 
     def _run(self):
         delay = 2.0
@@ -465,16 +535,9 @@ class TcpClientOutput:
             delay = 2.0
             self.connected = True
             log(f"{self.name}: connected")
-            threading.Thread(target=_reader, args=(sock, self.name, "server"), daemon=True).start()
             try:
-                while True:
-                    with self.cv:
-                        while not self.q:
-                            self.cv.wait(1.0)
-                        data = self.q.popleft()
-                    sock.sendall(data)
-                    inc(f'gateway_output_sent_total{{output="{self.name}"}}')
-            except OSError as exc:
+                self._serve(sock)
+            except OSError as exc:  # includes send/receive timeouts
                 log(f"{self.name}: link lost ({exc})")
             finally:
                 self.connected = False
@@ -494,6 +557,16 @@ class TcpClientOutput:
         return {"name": self.name, "connected": self.connected, "queued": len(self.q)}
 
 
+def _datagram_event(data: bytes) -> list:
+    """The one CoT event of a UDP datagram, or [] (TAK sends one event per datagram; more means
+    something was hidden, e.g. an event inside a comment)."""
+    events = core.split_cot_stream(bytearray(data))
+    if len(events) > 1:
+        inc('gateway_ingest_dropped_total{reason="multi-event-datagram"}')
+        return []
+    return events
+
+
 def start_udp_input(port: int) -> None:
     """Receive CoT that a TAK client sends by UDP (its UDP output) and feed the PLI ingest."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -506,8 +579,7 @@ def start_udp_input(port: int) -> None:
             except OSError:
                 return
             inc("gateway_udp_in_datagrams_total")
-            buf = bytearray(data)
-            for ev in core.split_cot_stream(buf):
+            for ev in _datagram_event(data):
                 ingest_event(ev, f"udp_in@{addr[0]}")
 
     threading.Thread(target=loop, daemon=True).start()
@@ -544,7 +616,7 @@ def start_multicast_input() -> None:
             except OSError:
                 return
             inc("gateway_multicast_in_datagrams_total")
-            for ev in core.split_cot_stream(bytearray(data)):
+            for ev in _datagram_event(data):
                 ingest_event(ev, f"multicast@{addr[0]}", "lan")
 
     threading.Thread(target=loop, daemon=True).start()
@@ -820,6 +892,8 @@ def open_session_retry():
 def main() -> None:
     if _MODE_ERROR is not None:
         raise SystemExit(f"configuration error: {_MODE_ERROR}")
+    if _CONFIG_ERRORS:
+        raise SystemExit("configuration error: " + "; ".join(_CONFIG_ERRORS))
     try:
         cfg = load_config()
         INGEST[0] = bool(cfg.get("ingest"))
@@ -832,6 +906,9 @@ def main() -> None:
     threading.Thread(target=ThreadingHTTPServer((http_bind, port), Ops).serve_forever, daemon=True).start()
     log(f"v{__version__} mode={MODE} org={gc.ORG} outputs={[o.name for o in OUTPUTS]} ingest={INGEST[0]} "
         f"ingest_from={','.join(sorted(INGEST_FROM))} ingest_uids={len(INGEST_UIDS) or 'this machine'} http={http_bind}:{port}")
+    if INGEST[0] and not INGEST_UIDS and os.path.exists("/.dockerenv"):
+        log("WARNING: TAK_INGEST=1 without TAK_INGEST_UIDS in Docker publishes nothing: packets from the "
+            "host do not come from 127.0.0.1. Set TAK_INGEST_UIDS to the device uids.")
 
     if UDP_IN_PORT:
         start_udp_input(UDP_IN_PORT)

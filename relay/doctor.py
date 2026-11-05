@@ -233,6 +233,10 @@ def check_tak_side(m) -> None:
     sources = os.environ.get("TAK_INGEST_FROM") or tak_links.default_ingest_from(m or "direct")
     uids = os.environ.get("TAK_INGEST_UIDS", "")
     detail = f"on, from {sources}, devices {uids or 'on this machine only'}" if ingest else "off (nothing is published from TAK)"
+    if ingest and not uids and os.path.exists("/.dockerenv"):
+        report("WARN", "PLI to backbone", detail + ", but in Docker nothing arrives from this machine",
+               "set TAK_INGEST_UIDS=<device uids>: packets from the host do not come from 127.0.0.1")
+        return
     report("WARN" if ingest and "server" in sources else "INFO", "PLI to backbone", detail,
            "TAK_INGEST_FROM=server publishes every TAK Server user's position to the backbone")
 

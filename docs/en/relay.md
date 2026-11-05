@@ -87,6 +87,7 @@ PLI are never converted.
 | `TAK_HOST`, `TAK_UDP_PORT` | `127.0.0.1`, `6969` | Single UDP target (older form) |
 | `TAK_PORT` | `8087` | TCP server for ATAK/WinTAK streaming clients |
 | `TAK_MAX_CLIENTS` | `64` | Most TCP clients at once; further connections are refused |
+| `TAK_MAX_CLIENTS_PER_IP` | `8` | Most TCP clients from one address, so one host cannot take every slot |
 | `TAK_SERVER` | — | `host[:port]` of a TAK Server to stream to (see below) |
 | `GATEWAY_CONFIG` | — | JSON file replacing all of the above |
 
@@ -121,6 +122,12 @@ their own.
 key is never left on disk. In Docker, put the files in `certs/tak/` and use `/certs/tak/…` paths.
 A wrong password or file stops the relay at start with a clear message; `doctor.py` tests the
 handshake. Users on the TAK Server are never published to the backbone (next section).
+
+With a truststore (`TAK_SERVER_TRUST_P12` or `TAK_SERVER_CA`) the relay trusts only that CA, not the
+operating system's public CAs, so `TAK_SERVER_VERIFY_HOSTNAME=0` still accepts only certificates
+from your TAK Server's CA. Without a truststore the public CAs are used (a TAK Server with a
+publicly issued certificate). Sending and receiving give up after 10 s without progress, and the
+relay reconnects.
 
 Do not feed the same devices both directly (UDP/`:8087`) and through the TAK Server: they would
 get every marker twice. Choose one path per device.
@@ -173,9 +180,9 @@ been down for `GATEWAY_LOST_S` (300 s) or no sample has arrived for `GATEWAY_WAT
 ## HTTP endpoints (`GATEWAY_HTTP_PORT`, default 8088)
 
 The HTTP port listens on `GATEWAY_HTTP_BIND`, by default `127.0.0.1` (this machine only), because
-it has no authentication and `/api/sample` returns backbone payloads. The Docker image sets
-`0.0.0.0` inside the container and `docker-compose.yml` publishes the port on the host's
-`127.0.0.1` only. To reach it from another machine, set `GATEWAY_HTTP_BIND=0.0.0.0` (native) or
+it has no authentication and `/api/sample` returns backbone payloads. The Docker image keeps that
+default; `docker-compose.yml` sets `0.0.0.0` inside the container and publishes the port on the
+host's `127.0.0.1` only. To reach it from another machine, set `GATEWAY_HTTP_BIND=0.0.0.0` (native) or
 change the compose mapping, and limit access with a firewall.
 
 | Path | Content |
@@ -204,12 +211,14 @@ Docker image.
   inputs work: TAK devices on the network must reach 8087, 6971 and 8554, so those listen on
   all interfaces. 8088 (`/api/sample` returns buffered backbone payloads) listens on this machine
   only by default. Keep the relay on a network you trust, and firewall the ports elsewhere.
-- **TCP clients are capped** at `TAK_MAX_CLIENTS` (64); further connections are refused
-  (`gateway_output_rejected_total`).
+- **TCP clients are capped** at `TAK_MAX_CLIENTS` (64) in all and `TAK_MAX_CLIENTS_PER_IP` (8) per
+  address; further connections are refused (`gateway_output_rejected_total`).
 - **Least privilege on the fabric.** The relay reads widely (`**` with `GATEWAY_INGEST_ALL=1`)
   but writes only heartbeats and, with `TAK_INGEST=1`, PLI under your own slot.
-- **Untrusted input.** Other vendors' CoT is validated before forwarding (no DTD, size and
-  coordinate limits, stale check); field values in generated CoT are XML-escaped.
+- **Untrusted input.** Other vendors' CoT is validated before forwarding: UTF-8 only, exactly one
+  `<event>`, no DTD, size and coordinate limits, stale check. A UDP datagram that holds more than
+  one event is dropped (`reason="multi-event-datagram"`). Field values in generated CoT are
+  XML-escaped.
 - **Container** runs as UID 10001. On Linux the mounted key must be readable by it.
 
 ## Known limitations

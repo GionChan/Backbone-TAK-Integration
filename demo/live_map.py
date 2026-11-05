@@ -12,6 +12,7 @@ Run:   python demo/live_map.py      Open: http://localhost:8080  (control: /cont
 import json
 import os
 import queue
+import re
 import sys
 import threading
 import time
@@ -333,8 +334,18 @@ es.onerror=()=>{
   document.getElementById('conn-label').textContent='reconnecting…';
 };
 
+// Backbone data is untrusted: safe characters in ids and numbers in numeric fields before any of it
+// reaches innerHTML.
+function clean(d){
+  const num=v=>{const n=Number(v);return Number.isFinite(n)?n:0;};
+  d.source=String(d.source||'').replace(/[^A-Za-z0-9._:-]/g,'_');
+  d.phase=String(d.phase||'').replace(/[^A-Za-z-]/g,'');
+  for(const k of ['lat','lon','alt','heading','speed_kmh','seq','delay_s']) if(k in d) d[k]=num(d[k]);
+  return d;
+}
+
 es.onmessage=e=>{
-  const d=JSON.parse(e.data);
+  const d=clean(JSON.parse(e.data));
   const uid=d.source;
   if(!uid) return;
 
@@ -772,6 +783,7 @@ function showMissionPreview(msg){
   const tbody = document.getElementById('mission-rows');
   tbody.innerHTML = '';
   _mission.forEach((m,i) => {
+    m = clean(m);
     const phase = m.lost ? 'LOST' : m.phase.toUpperCase();
     const color = m.lost ? '#f85149' : m.phase==='orbit' ? '#e3b341' : '#3fb950';
     const tr = document.createElement('tr');
@@ -905,23 +917,31 @@ class _Handler(BaseHTTPRequestHandler):
             self._inject()
 
     def _inject(self):
+        # JSON only: a web page can send text/plain to this port without a CORS preflight, but not
+        # application/json (and no Access-Control-Allow-Origin is sent back).
+        if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
+            self.send_response(415)
+            self.end_headers()
+            return
         try:
             length = int(self.headers.get("Content-Length", 0))
             d = json.loads(self.rfile.read(length))
             uid = str(d.pop("source", "hostile-uav-04"))
             lat, lon = float(d.pop("lat")), float(d.pop("lon"))
-            fields = {k: d.pop(k) for k in ("alt", "heading", "speed_kmh", "phase", "lost") if k in d}
-            for k in ("exercise", "classification", "label", "scenario", "seq", "ts_ms"):
-                d.pop(k, None)  # the sender sets these
-            d.setdefault("reset", False)
+            fields = {k: float(d.pop(k)) for k in ("alt", "heading", "speed_kmh") if k in d}
+            if "phase" in d:
+                fields["phase"] = re.sub(r"[^A-Za-z-]", "", str(d.pop("phase")))
+            if "lost" in d:
+                fields["lost"] = bool(d.pop("lost"))
+            # Only known extras go on to the fabric; the sender sets the exercise labels itself.
+            d = {"reset": bool(d.get("reset", False))}
             if _sender is not None:
                 _sender.track(uid, lat, lon, **fields, **d)
             else:
                 _broadcast(json.dumps(dict(d, source=uid, lat=lat, lon=lon, **fields)))
-            print(f"[inject] {uid}  phase={d.get('phase','?')}  lost={d.get('lost', False)}")
+            print(f"[inject] {uid}  phase={fields.get('phase','?')}  lost={fields.get('lost', False)}")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(b'{"ok":true}')
         except Exception as exc:

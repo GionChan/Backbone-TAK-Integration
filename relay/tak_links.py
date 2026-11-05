@@ -182,7 +182,15 @@ def _load_p12_chain(ctx: ssl.SSLContext, path: str, password) -> None:
 
 def ssl_context(tls: dict) -> ssl.SSLContext:
     """Client TLS context for a TAK Server link (PEM or .p12). Raises RuntimeError/OSError/SSLError."""
-    ctx = ssl.create_default_context(cafile=tls.get("ca"))
+    if tls.get("ca") or tls.get("trust_p12"):
+        # Trust only the given TAK Server CA, never the OS's public CAs as well: with hostname checks
+        # off (common for a TAK Server reached by IP) any public certificate would pass.
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        if tls.get("ca"):
+            ctx.load_verify_locations(cafile=tls["ca"])
+    else:
+        ctx = ssl.create_default_context()  # a TAK Server with a publicly issued certificate
     if tls.get("trust_p12"):
         key, cert, extra = _pkcs12(tls["trust_p12"], tls.get("trust_password"))
         certs = [c for c in [cert, *(extra or ())] if c is not None]

@@ -41,8 +41,10 @@ section or the compose image tag disagree.
 4. The exact template ZIP is installed on Windows with every Python hidden from `PATH`: bundle
    from a `.zip`, device name typed in, relay running on the bundled Python, uninstalled.
 
-The image and the GitHub Release are published only after all four have passed: a failed check
-leaves nothing published. Pushes to `feature/**` run all of this as a dry run, without publishing.
+The image is built once into an OCI archive. Check 2 and the push both use that archive, so the
+published image is the tested one. The image and the GitHub Release are published only after all
+four checks have passed: a failed check leaves nothing published. Pushes to `feature/**` run all of
+this as a dry run, without publishing.
 
 ## Per-device packages
 

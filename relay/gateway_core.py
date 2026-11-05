@@ -32,15 +32,16 @@ def split_cot_stream(buf: bytearray) -> list:
 
 def prometheus_text(counters: dict, gauges: dict) -> str:
     """Prometheus text exposition. Keys may carry labels: 'name{a="b"}'."""
-    lines = []
-    for name, v in sorted(counters.items()):
-        base = name.split("{")[0]
-        lines.append(f"# TYPE {base} counter")
-        lines.append(f"{name} {v}")
-    for name, v in sorted(gauges.items()):
-        base = name.split("{")[0]
-        lines.append(f"# TYPE {base} gauge")
-        lines.append(f"{name} {v}")
+    # One "# TYPE" line per metric, before all of its series: Prometheus rejects the whole scrape
+    # when a metric has a second TYPE line.
+    lines, typed = [], set()
+    for kind, metrics in (("counter", counters), ("gauge", gauges)):
+        for name, v in sorted(metrics.items()):
+            base = name.split("{")[0]
+            if base not in typed:
+                typed.add(base)
+                lines.append(f"# TYPE {base} {kind}")
+            lines.append(f"{name} {v}")
     return "\n".join(lines) + "\n"
 
 

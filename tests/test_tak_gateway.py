@@ -306,6 +306,64 @@ class TcpServerOutputTests(unittest.TestCase):
         for s in socks:
             s.close()
 
+    def test_per_address_cap(self):
+        port = _free_port()
+        with mock.patch.object(gw, "MAX_TCP_CLIENTS", 10), mock.patch.object(gw, "MAX_TCP_CLIENTS_PER_IP", 2):
+            out = gw.TcpServerOutput({"port": port})
+            socks = [socket.create_connection(("127.0.0.1", port)) for _ in range(3)]
+            key = f'gateway_output_rejected_total{{output="{out.name}"}}'
+            deadline = time.time() + 5
+            while gw.COUNTERS[key] < 1 and time.time() < deadline:
+                time.sleep(0.05)
+        self.assertEqual(out.status()["clients"], 2)
+        self.assertEqual(gw.COUNTERS[key], 1)
+        for s in socks:
+            s.close()
+
+
+class TakServerLinkTests(unittest.TestCase):
+    def test_one_thread_reads_sends_and_reconnects_after_server_close(self):
+        srv = socket.socket()
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(2)
+        srv.settimeout(10)
+        pli = gw.bc.make_cot("ANDROID-srv", "a-f-G-U-C", 60.1, 24.9)
+        with mock.patch.object(gw, "ingest_event") as ing:
+            out = gw.TcpClientOutput({"host": "127.0.0.1", "port": srv.getsockname()[1], "stall_s": 2})
+            conn, _ = srv.accept()
+            conn.settimeout(5)
+            out.send(b"<event/>")
+            self.assertEqual(conn.recv(64), b"<event/>")
+            conn.sendall(pli)
+            deadline = time.time() + 5
+            while not ing.called and time.time() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(ing.call_args.args[2], "server")
+            conn.close()                       # the server goes away: the link must notice and reconnect
+            again, _ = srv.accept()
+            again.close()
+        srv.close()
+
+
+class ConfigValueTests(unittest.TestCase):
+    def test_bad_number_is_a_config_error(self):
+        errors = []
+        with mock.patch.object(gw, "_CONFIG_ERRORS", errors), mock.patch.dict(os.environ, {"X_N": "64 clients"}):
+            self.assertEqual(gw._int_env("X_N", 64), 64)
+        with mock.patch.object(gw, "_CONFIG_ERRORS", errors), mock.patch.dict(os.environ, {"X_N": "0"}):
+            gw._int_env("X_N", 64)
+        self.assertEqual(len(errors), 2)
+
+    def test_every_source_has_a_rate_limiter(self):
+        self.assertEqual(set(gw._src_limiters), set(gw.bc.ALL_SOURCES))
+
+
+class DatagramTests(unittest.TestCase):
+    def test_datagram_with_two_events_is_dropped(self):
+        one = gw.bc.make_cot("u1", "a-f-G", 60, 25)
+        self.assertEqual(len(gw._datagram_event(one)), 1)
+        self.assertEqual(gw._datagram_event(b"<!-- " + one + b" -->" + one), [])
+
 
 if __name__ == "__main__":
     unittest.main()

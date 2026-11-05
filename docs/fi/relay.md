@@ -89,6 +89,7 @@ voi hienosäätää.
 | `TAK_HOST`, `TAK_UDP_PORT` | `127.0.0.1`, `6969` | Yksi UDP-kohde (vanhempi muoto) |
 | `TAK_PORT` | `8087` | TCP-palvelin ATAK- ja WinTAK-striimausasiakkaille |
 | `TAK_MAX_CLIENTS` | `64` | TCP-asiakkaiden enimmäismäärä; sen ylittävät yhteydet hylätään |
+| `TAK_MAX_CLIENTS_PER_IP` | `8` | TCP-asiakkaiden enimmäismäärä yhdestä osoitteesta, jotta yksi kone ei voi varata kaikkia paikkoja |
 | `TAK_SERVER` | – | TAK Serverin `osoite[:portti]`, jolle virta lähetetään (ks. alla) |
 | `GATEWAY_CONFIG` | – | JSON-tiedosto, joka korvaa kaikki yllä olevat |
 
@@ -124,6 +125,12 @@ ja Docker-imagessa). Purettua avainta ei jätetä levylle. Dockerissa tiedostot 
 kansioon `certs/tak/`, ja polut ovat muotoa `/certs/tak/…`. Väärä salasana tai tiedosto
 pysäyttää relayn käynnistyksessä selkeään virheilmoitukseen, ja `doctor.py` testaa yhteyden
 muodostuksen. TAK Serverin käyttäjiä ei koskaan julkaista backboneen (ks. seuraava luku).
+
+Kun truststore on annettu (`TAK_SERVER_TRUST_P12` tai `TAK_SERVER_CA`), relay luottaa vain siihen
+CA:han eikä käyttöjärjestelmän julkisiin CA:ihin. Silloin myös `TAK_SERVER_VERIFY_HOSTNAME=0`
+hyväksyy vain TAK Serverin oman CA:n myöntämät varmenteet. Ilman truststorea käytetään julkisia
+CA:ita (TAK Server, jolla on julkisesti myönnetty varmenne). Lähetys ja vastaanotto luovuttavat,
+jos ne eivät etene 10 sekuntiin, ja relay muodostaa yhteyden uudelleen.
 
 Älä syötä samoja laitteita sekä suoraan (UDP tai `:8087`) että TAK Serverin kautta, koska silloin
 jokainen merkki tulee kahdesti. Valitse jokaiselle laitteelle yksi reitti.
@@ -184,8 +191,8 @@ yhteys fabriciin on ollut poikki `GATEWAY_LOST_S` sekuntia (300) tai dataa ei ol
 
 HTTP-portti kuuntelee osoitetta `GATEWAY_HTTP_BIND`, oletuksena `127.0.0.1` (vain tämä kone),
 koska siinä ei ole tunnistautumista ja `/api/sample` palauttaa backbonen dataa. Docker-image
-asettaa kontin sisällä arvon `0.0.0.0`, ja `docker-compose.yml` julkaisee portin vain isännän
-osoitteeseen `127.0.0.1`. Jos porttiin pitää päästä toiselta koneelta, aseta
+säilyttää tämän oletuksen; `docker-compose.yml` asettaa kontin sisällä arvon `0.0.0.0` ja
+julkaisee portin vain isännän osoitteeseen `127.0.0.1`. Jos porttiin pitää päästä toiselta koneelta, aseta
 `GATEWAY_HTTP_BIND=0.0.0.0` (natiivisti) tai muuta composen porttimääritystä, ja rajaa pääsy
 palomuurilla.
 
@@ -218,12 +225,14 @@ mediamtx ovat Docker-imagessa valmiina.
   kuuntelevat kaikkia liitäntöjä. Portti 8088 (`/api/sample` palauttaa puskuroitua
   backbone-dataa) kuuntelee oletuksena vain tätä konetta. Pidä relay luotetussa verkossa ja estä
   portit palomuurilla muualta.
-- **TCP-asiakkaiden määrä on rajattu** muuttujalla `TAK_MAX_CLIENTS` (64); sen ylittävät
-  yhteydet hylätään (`gateway_output_rejected_total`).
+- **TCP-asiakkaiden määrä on rajattu:** yhteensä `TAK_MAX_CLIENTS` (64) ja osoitetta kohden
+  `TAK_MAX_CLIENTS_PER_IP` (8). Rajan ylittävät yhteydet hylätään (`gateway_output_rejected_total`).
 - **Vähimmät oikeudet fabricissa.** Relay lukee laajasti (`**`, kun `GATEWAY_INGEST_ALL=1`), mutta
   kirjoittaa vain heartbeateja ja `TAK_INGEST=1`-asetuksella PLI:tä omaan slotiinsa.
-- **Epäluotettava syöte.** Muiden valmistajien CoT tarkistetaan ennen välittämistä (ei DTD:tä,
-  koko- ja koordinaattirajat, vanhenemistarkistus). Generoidun CoT:n kenttäarvot escapetaan.
+- **Epäluotettava syöte.** Muiden valmistajien CoT tarkistetaan ennen välittämistä: vain UTF-8,
+  tasan yksi `<event>`, ei DTD:tä, koko- ja koordinaattirajat sekä vanhenemistarkistus.
+  UDP-datagrammi, jossa on useampi kuin yksi tapahtuma, hylätään
+  (`reason="multi-event-datagram"`). Generoidun CoT:n kenttäarvot escapetaan.
 - **Kontti** ajetaan käyttäjänä UID 10001. Linuxilla liitetyn avaimen pitää olla sen luettavissa.
 
 ## Tunnetut rajoitukset

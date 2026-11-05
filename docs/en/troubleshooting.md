@@ -20,6 +20,7 @@ A running relay shows its state at <http://localhost:8088/>. `/status` gives the
 | Publish "works" but nobody receives | Key outside your slot (silently denied) | Publish only under `<slot>/…`; check with `goat flow <key>` |
 | `/status` healthy, TAK shows nothing | UDP target wrong, firewall, TAK input not enabled | In Docker use `host.docker.internal`, not `127.0.0.1`. Open the TAK input port. Check `gateway_output_sent_total` |
 | Markers appear and vanish | Source sends stale or past timestamps; clock skew | Check `gateway_cot_dropped_total{reason="already-stale"}`; sync the clock (NTP) |
+| A vendor's markers never appear, `gateway_cot_dropped_total{reason="not-one-event"}` or `"not-utf8"` | The source sends several events in one message, or text that is not UTF-8 | Ask the vendor for one CoT event per message, in UTF-8 |
 | `no backbone samples for …` | Nothing published on the subscribed keys | `GATEWAY_INGEST_ALL=1` to see all vendors; check `/streams` |
 | ATAK client disconnects | It stopped reading for 10 s | Expected protection; check the client's network |
 | `port is already allocated` | Another process on 8087/8088/6971/8554/8080/7447 | Stop it, or change the host side of the port mapping |

@@ -17,6 +17,7 @@ Bearer <token> on every route except /healthz.
 """
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import queue
@@ -45,7 +46,8 @@ _UID_RE = re.compile(r'uid="([^"]+)"')
 def _authed(h: BaseHTTPRequestHandler) -> bool:
     if not TOKEN:
         return True
-    return h.headers.get("Authorization", "") == f"Bearer {TOKEN}"
+    # Constant-time comparison: no timing hint about how much of the token was right.
+    return hmac.compare_digest(h.headers.get("Authorization", "").encode(), f"Bearer {TOKEN}".encode())
 
 
 class H(BaseHTTPRequestHandler):

@@ -160,6 +160,15 @@ class P12Tests(unittest.TestCase):
         t.join(5)
         self.assertEqual(seen.get("cn"), "relay-01")
 
+    def test_truststore_replaces_public_cas(self):
+        ctx = tak_links.ssl_context({"trust_p12": str(self.d / "truststore.p12"), "trust_password": "atak",
+                                     "verify_hostname": False})
+        # Only the TAK Server CA: with hostname checks off a public CA would accept any certificate.
+        self.assertEqual(len(ctx.get_ca_certs()), 1)
+        self.assertEqual(ctx.verify_mode, ssl.CERT_REQUIRED)
+        ctx_pem = tak_links.ssl_context({"ca": str(self.d / "ca.pem")})
+        self.assertEqual(len(ctx_pem.get_ca_certs()), 1)
+
     def test_decrypted_key_does_not_stay_on_disk(self):
         made = []
         real = tempfile.mkdtemp

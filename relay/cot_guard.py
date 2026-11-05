@@ -3,12 +3,17 @@
 Other vendors' CoT is forwarded verbatim, so a malformed event must not reach
 a TAK client (some have crashed on odd input). Pure functions, no I/O.
 """
+import re
 import threading
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
 MAX_BYTES = 64 * 1024
+_EVENT_OPEN = re.compile(rb"<event[\s/>]")
+_EVENT_CLOSE = re.compile(rb"</event\s*>")
+_DECLARED_ENCODING = re.compile(rb"""\s*<\?xml[^>]*\bencoding\s*=\s*["']([^"']+)["']""", re.I)
+_ASCII_COMPATIBLE = {b"utf-8", b"utf8", b"us-ascii", b"ascii", b"iso-8859-1", b"latin-1", b"latin1"}
 
 
 def _parse_time(s: str) -> float:
@@ -21,6 +26,17 @@ def validate_cot(data: bytes, now: float = None):
     """Return (True, "") or (False, reason)."""
     if len(data) > MAX_BYTES:
         return False, "too-large"
+    # UTF-8 (or another ASCII-compatible encoding) only. In UTF-16/32 the byte checks below would
+    # see nothing while the parser still decodes the text, DTD included.
+    if b"\x00" in data:
+        return False, "not-utf8"
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False, "not-utf8"
+    m = _DECLARED_ENCODING.match(data)
+    if m and m.group(1).lower() not in _ASCII_COMPATIBLE:
+        return False, "not-utf8"
     # Anywhere, not just at the start: a comment can push a DTD past any prefix check.
     lower = data.lower()
     if b"<!doctype" in lower or b"<!entity" in lower:
@@ -31,6 +47,10 @@ def validate_cot(data: bytes, now: float = None):
         return False, "not-xml"
     if ev.tag != "event":
         return False, "not-event"
+    # Exactly one event. A second one hidden in a comment or CDATA comes out as an event of its own
+    # when a TAK stream is split at "</event>", past the relay tag and the echo guard.
+    if len(_EVENT_OPEN.findall(data)) != 1 or len(_EVENT_CLOSE.findall(data)) != 1:
+        return False, "not-one-event"
     if not ev.get("uid"):
         return False, "no-uid"
     pt = ev.find("point")

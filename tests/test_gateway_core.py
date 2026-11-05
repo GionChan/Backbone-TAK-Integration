@@ -35,6 +35,11 @@ class CoreTests(unittest.TestCase):
         self.assertIn('c_total{a="b"} 3', t)
         self.assertIn("# TYPE g gauge", t)
 
+    def test_prometheus_one_type_line_per_metric(self):
+        t = core.prometheus_text({'d_total{r="a"}': 1, 'd_total{r="b"}': 2}, {})
+        self.assertEqual(t.count("# TYPE d_total counter"), 1)
+        self.assertLess(t.index("# TYPE d_total"), t.index('d_total{r="a"}'))
+
     def test_data_package(self):
         z = zipfile.ZipFile(io.BytesIO(core.atak_data_package("10.0.0.5", 8087)))
         self.assertIn("MANIFEST/manifest.xml", z.namelist())

@@ -30,7 +30,7 @@ services:
   tak-relay:
     <<: *fabric
     build: {context: ., target: relay}
-    image: efdi-tak-relay:1.1.2
+    image: efdi-tak-relay:1.1.3
     environment:
       <<: *fabric-env
       GATEWAY_SYSTEM: ${GATEWAY_SYSTEM:-tak-gateway}
@@ -49,6 +49,8 @@ services:
       TAK_INGEST_FROM: ${TAK_INGEST_FROM:-}
       TAK_INGEST_UIDS: ${TAK_INGEST_UIDS:-}
       TAK_UDP_IN_PORT: "6971"
+      # HTTP port on all container interfaces, so the 127.0.0.1-only port mapping below reaches it.
+      GATEWAY_HTTP_BIND: 0.0.0.0
       # Optional TAK Server link (see docs/en/relay.md). Put the .p12 files in ./certs/tak/.
       TAK_SERVER: ${TAK_SERVER:-}
       TAK_SERVER_P12: ${TAK_SERVER_P12:-}
@@ -58,7 +60,7 @@ services:
       TAK_SERVER_VERIFY_HOSTNAME: ${TAK_SERVER_VERIFY_HOSTNAME:-1}
       # Backbone video -> RTSP -> TAK "Play Video". GATEWAY_VIDEO_HOST = address TAK clients use.
       GATEWAY_VIDEO: ${GATEWAY_VIDEO:-0}
-      GATEWAY_VIDEO_HOST: ${GATEWAY_VIDEO_HOST:-127.0.0.1}
+      GATEWAY_VIDEO_HOST: ${GATEWAY_VIDEO_HOST:-}   # no default: an address TAK clients cannot reach gives dead video links
       GATEWAY_VIDEO_PORT: "8554"
     ports:
       - "8087:8087"       # CoT TCP stream (ATAK/WinTAK "TAK Server -> TCP")
@@ -138,5 +140,5 @@ services:
       EDGE_API_PORT: "8090"
       EDGE_API_TOKEN: ${EDGE_API_TOKEN:-}
     ports:
-      - "8090:8090"
+      - "127.0.0.1:8090:8090"   # this machine only: the API publishes to the fabric with the real certificate
     restart: unless-stopped
