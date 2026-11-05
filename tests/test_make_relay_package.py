@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 import zipfile
@@ -351,6 +352,85 @@ class PowerShellSyntaxTests(unittest.TestCase):
         for f in sorted([*(REPO_ROOT / "demo").glob("*.ps1"), *(REPO_ROOT / "tests").glob("*.ps1")]):
             with self.subTest(name=f.name):
                 self._assert_parses(f.name, f.read_text(encoding="utf-8"))
+
+
+class LinuxPackageTests(unittest.TestCase):
+    """The Linux .tar.gz (--platform linux) and its installer in tools/field_package/linux/."""
+
+    @staticmethod
+    def _build(tmp, **overrides) -> str:
+        return _build(tmp, out=str(Path(tmp) / "lx-tak-relay-linux.tar.gz"), platform="linux", **overrides)
+
+    def test_layout_and_modes(self):
+        with tempfile.TemporaryDirectory() as tmp, tarfile.open(self._build(tmp)) as t:
+            members = {m.name.split("/", 1)[1]: m for m in t.getmembers() if "/" in m.name}
+            top = {m.name.split("/", 1)[0] for m in t.getmembers()}
+            self.assertEqual(top, {"lx-tak-relay-linux"})  # one folder: tar -xzf does not spill
+            for name in pkg.APP_FILES:
+                self.assertIn(f"app/{name}", members)
+            for name in ("install.sh", "run.sh", "uninstall.sh"):
+                self.assertEqual(members[name].mode, 0o755, name)
+            self.assertEqual(members[f"certs/{ORG}-key.pem"].mode, 0o600)
+            self.assertEqual(members["device.env"].mode, 0o600)
+            self.assertEqual(members["certs"].mode, 0o700)
+            self.assertNotIn("install.ps1", members)
+            env = t.extractfile(members["device.env"]).read().decode()
+        self.assertIn("GOAT_CERT_DIR=./certs", env)
+        self.assertIn("run.sh reads this", env)
+        self.assertNotIn("\\", env)
+
+    def test_template_has_no_secret(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = pkg.build_package(system=None, cert_dir=None, out=str(Path(tmp) / "t.tar.gz"),
+                                    tak_host="127.0.0.1", tak_udp_port=6969, tak_port=8087, tak_ingest=True,
+                                    tak_udp_in_port=6971, template=True, platform="linux")
+            self.assertIsNone(out)
+            with tarfile.open(Path(tmp) / "t.tar.gz") as t:
+                names = t.getnames()
+                readme = t.extractfile("t/certs/README.txt").read().decode()
+        self.assertEqual([n for n in names if n.endswith((".pem", ".key", ".p12", ".cbor"))], [])
+        self.assertIn("install.sh", readme)
+
+    def test_same_keys_in_fi_and_en(self):
+        keys = {"fi": set(), "en": set()}
+        for ln in pkg.LINUX_TEMPLATES["lang.txt"].splitlines():
+            if ln and not ln.startswith("#"):
+                lang, key, _ = ln.split("|", 2)
+                keys[lang].add(key)
+        self.assertEqual(keys["fi"], keys["en"])
+        self.assertGreater(len(keys["fi"]), 40)
+
+    def test_used_keys_exist(self):
+        known = {ln.split("|")[1] for ln in pkg.LINUX_TEMPLATES["lang.txt"].splitlines() if ln.startswith("en|")}
+        used = set()
+        for name in pkg.LINUX_FILES:
+            if name.endswith(".sh"):
+                used |= set(re.findall(r"\bT ([a-z_]+)\b", pkg.LINUX_TEMPLATES[name]))
+        used |= {f"mode_{m}" for m in pkg.MODES}  # built as T "mode_$MODE"
+        self.assertEqual(used - known, set())
+
+    def test_pins_match_the_builder(self):
+        common = pkg.LINUX_TEMPLATES["common.sh"]
+        for req in pkg.FIELD_REQUIREMENTS:
+            self.assertIn(f'"{req}"', common)
+
+    def test_scripts_parse(self):
+        bash = shutil.which("bash")
+        if not bash:
+            self.skipTest("bash not installed")
+        for name in pkg.LINUX_FILES:
+            if name.endswith(".sh"):
+                with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False, newline="\n") as f:
+                    f.write(pkg.LINUX_TEMPLATES[name])
+                try:
+                    r = subprocess.run([bash, "-n", f.name], capture_output=True, text=True)
+                    self.assertEqual(r.returncode, 0, f"{name}: {r.stderr}")
+                finally:
+                    os.unlink(f.name)
+
+    def test_unknown_platform_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaises(SystemExit):
+            _build(tmp, platform="macos")
 
 
 if __name__ == "__main__":

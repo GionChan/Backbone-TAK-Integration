@@ -3,7 +3,8 @@ name: Release
 # Tag vX.Y.Z (must equal relay __version__ and the newest CHANGELOG section) publishes:
 #   - image ghcr.io/<owner>/efdi-tak-relay:X.Y.Z, :X.Y, :latest (linux/amd64 + linux/arm64,
 #     SBOM and provenance attached). A new GHCR package of a private repo is private.
-#   - GitHub Release with the field-package template (no certificate inside) and SHA256SUMS.
+#   - GitHub Release with the field-package templates for Windows (.zip) and Linux (.tar.gz), no
+#     certificate inside, and SHA256SUMS.
 # Nothing is published until every check has passed: push-image and publish run last.
 # feature/** pushes and workflow_dispatch are a dry run: everything is built and tested,
 # nothing is published.
@@ -93,7 +94,7 @@ jobs:
     # failed check never leaves an image (or :latest) published without its release. Pushes the
     # exact archive the image job tested.
     if: needs.check.outputs.publish == 'true'
-    needs: [check, image, install-template]
+    needs: [check, image, install-template, install-template-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -124,24 +125,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Build the template (bundled Python, no certificate)
+      - name: Build the templates (no certificate; Windows with bundled Python, Linux with wheels)
         run: |
           v="${{ needs.check.outputs.version }}"
           python tools/make_relay_package.py --template --out "release/efdi-tak-relay-$v-windows-x64.zip"
+          python tools/make_relay_package.py --template --platform linux --out "release/efdi-tak-relay-$v-linux.tar.gz"
       - name: Nothing secret inside
         run: |
-          python3 - release/*.zip <<'EOF'
-          import sys, zipfile
-          z = zipfile.ZipFile(sys.argv[1])
-          bad = [n for n in z.namelist() if n.startswith("certs/") and n != "certs/README.txt"]
-          bad += [n for n in z.namelist() if n.lower().endswith((".pem", ".key", ".p12", ".cbor"))]
-          env = z.read("device.env").decode()
-          bad += [ln for ln in env.splitlines() if ln.startswith(("GOAT_ORG=", "GATEWAY_SYSTEM=", "TAK_SERVER"))]
-          assert not bad, f"template must not contain: {bad}"
-          print("template clean:", len(z.namelist()), "files")
+          python3 - release/*.zip release/*.tar.gz <<'EOF'
+          import sys, tarfile, zipfile
+          for path in sys.argv[1:]:
+              if path.endswith(".zip"):
+                  z = zipfile.ZipFile(path)
+                  names, env = z.namelist(), z.read("device.env").decode()
+              else:
+                  t = tarfile.open(path)
+                  names = [n.split("/", 1)[1] for n in t.getnames() if "/" in n]
+                  env = t.extractfile(next(m for m in t.getmembers() if m.name.endswith("/device.env"))).read().decode()
+              bad = [n for n in names if n.startswith("certs/") and n not in ("certs/README.txt", "certs/tak")]
+              bad += [n for n in names if n.lower().endswith((".pem", ".key", ".p12", ".cbor"))]
+              bad += [ln for ln in env.splitlines() if ln.startswith(("GOAT_ORG=", "GATEWAY_SYSTEM=", "TAK_SERVER"))]
+              assert not bad, f"{path}: template must not contain: {bad}"
+              print(path, "clean:", len(names), "files")
           EOF
       - name: Checksums
-        run: cd release && sha256sum *.zip > SHA256SUMS && cat SHA256SUMS
+        run: cd release && sha256sum *.zip *.tar.gz > SHA256SUMS && cat SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: field-package
@@ -163,9 +171,25 @@ jobs:
       - name: Install the template, check, uninstall
         run: ./tests/ci_install_windows.ps1 -TemplateZip (Get-ChildItem release\*.zip | Select-Object -First 1).FullName
 
+  install-template-linux:
+    # Installs the exact Linux template that would be published, with no package index reachable.
+    needs: field-package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: field-package
+          path: release
+      - name: Install the template, check, uninstall
+        run: bash tests/ci_install_linux.sh --template release/*.tar.gz
+
   publish:
     if: needs.check.outputs.publish == 'true'
-    needs: [check, push-image, field-package, install-template]
+    needs: [check, push-image, field-package, install-template, install-template-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
