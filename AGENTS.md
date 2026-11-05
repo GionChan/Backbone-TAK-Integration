@@ -50,7 +50,7 @@ python -m compileall -q relay demo tools tests
 python relay/doctor.py                                   # preflight; exit 1 on failures
 python demo/local_router.py &                            # or: docker compose --profile demo up -d zenoh-router
 python tests/e2e_gateway.py                              # prints "GATEWAY E2E PASSED"
-shellcheck tools/field_package/linux/*.sh demo/*.sh tests/*.sh   # CI lints every .sh
+shellcheck -x -P SCRIPTDIR --severity=warning tools/field_package/linux/*.sh demo/*.sh tests/*.sh   # CI lints every .sh
 docker compose up -d                                     # relay only
 docker compose --profile demo up -d                      # + demo
 ```

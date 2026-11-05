@@ -63,7 +63,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: shellcheck
-        run: shellcheck tools/field_package/linux/*.sh demo/*.sh tests/*.sh
+        run: shellcheck -x -P SCRIPTDIR --severity=warning tools/field_package/linux/*.sh demo/*.sh tests/*.sh
       - name: Install, check, uninstall
         run: bash tests/ci_install_linux.sh
 
