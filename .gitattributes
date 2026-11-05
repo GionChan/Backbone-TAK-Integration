@@ -1,0 +1,4 @@
+# Shell scripts and the Linux installer messages must keep LF line endings, also in a Windows
+# checkout: bash rejects CRLF.
+*.sh text eol=lf
+tools/field_package/linux/lang.txt text eol=lf
