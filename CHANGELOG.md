@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.2.0 — 2026-11-05
+
+### Field package
+
+- Linux package: `make_relay_package.py --platform linux` builds a `.tar.gz` with `install.sh`,
+  `run.sh` and `uninstall.sh`, messages in Finnish and English, and the dependency wheels for
+  x86_64 and aarch64, so installing needs no network. The relay starts as a systemd user service,
+  with `--at-boot` as a systemd service that runs as the installing user, or from crontab without
+  systemd. The package folder and `certs/` are 700, the key and `device.env` 600.
+- In direct mode the Linux installer also asks where CoT goes by UDP and which other devices may
+  publish their position.
+- Releases carry a Linux template, `efdi-tak-relay-X.Y.Z-linux.tar.gz`, installed on Ubuntu before
+  publishing.
+
+### Demo
+
+- `demo/run-backbone-demo.sh` and `demo/setup-certs.sh` for Linux and macOS.
+
+### Deployment
+
+- Compose maps `host.docker.internal` to the Docker host, so the default UDP target works with
+  Docker Engine on Linux too.
+
 ## 1.1.4 — 2026-11-05
 
 ### Relay

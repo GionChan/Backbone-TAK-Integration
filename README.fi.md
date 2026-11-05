@@ -60,7 +60,8 @@ Backboneen menevät vain omien laitteiden sijainnit ja vain, kun `TAK_INGEST=1`.
 käyttäjien sijainteja ei julkaista koskaan.
 
 Kenttälaitteet ilman Dockeria: itseasentuva paketti komennolla
-`python tools/make_relay_package.py --system <nimi>`, ks. [kenttäpaketti](docs/fi/field-package.md).
+`python tools/make_relay_package.py --system <nimi>` (Windows) tai lisäksi `--platform linux`
+(Linux, systemd), ks. [kenttäpaketti](docs/fi/field-package.md).
 
 ## Pikaohje: demo
 
@@ -87,7 +88,7 @@ sertifikaatteja kaikki toimii paikallista reititintä vasten ilman verkkoyhteytt
 | Tilan valinta: suora, lähiverkko (multicast) tai TAK Server | [tilat](docs/fi/modes.md) | [modes](docs/en/modes.md) |
 | Relay: asetukset, topicit, operointi, tietoturva | [relay](docs/fi/relay.md) | [relay](docs/en/relay.md) |
 | Demo: skenaariot, lähetin, näkymät | [demo](docs/fi/demo.md) | [demo](docs/en/demo.md) |
-| Kenttälaitepaketti (Windows, ei Dockeria) | [kenttäpaketti](docs/fi/field-package.md) | [field package](docs/en/field-package.md) |
+| Kenttälaitepaketti (Windows ja Linux, ei Dockeria) | [kenttäpaketti](docs/fi/field-package.md) | [field package](docs/en/field-package.md) |
 | Julkaiseminen: image, kenttäpaketin pohja | [julkaisu](docs/fi/release.md) | [release](docs/en/release.md) |
 | Vianetsintä | [vianetsintä](docs/fi/troubleshooting.md) | [troubleshooting](docs/en/troubleshooting.md) |
 | Rajapintakuvaus | [`docs/asyncapi-tak-gateway.yaml`](docs/asyncapi-tak-gateway.yaml) | |

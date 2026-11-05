@@ -61,7 +61,8 @@ Only your own devices' positions go to the backbone, and only with `TAK_INGEST=1
 users never do.
 
 Field devices without Docker: build a self-installing package with
-`python tools/make_relay_package.py --system <name>`; see [field package](docs/en/field-package.md).
+`python tools/make_relay_package.py --system <name>` (Windows) or add `--platform linux` (Linux,
+systemd); see [field package](docs/en/field-package.md).
 
 ## Quick start: the demo
 
@@ -87,7 +88,7 @@ certificates everything runs against the local router, offline. See the [demo gu
 | Choose a mode: direct, local network (multicast) or TAK Server | [modes](docs/en/modes.md) | [tilat](docs/fi/modes.md) |
 | Relay: configuration, topics, operations, security | [relay](docs/en/relay.md) | [relay](docs/fi/relay.md) |
 | Demo: scenarios, sender, viewers | [demo](docs/en/demo.md) | [demo](docs/fi/demo.md) |
-| Field-device package (Windows, no Docker) | [field package](docs/en/field-package.md) | [kenttäpaketti](docs/fi/field-package.md) |
+| Field-device package (Windows and Linux, no Docker) | [field package](docs/en/field-package.md) | [kenttäpaketti](docs/fi/field-package.md) |
 | Releasing: image, field-package template | [release](docs/en/release.md) | [julkaisu](docs/fi/release.md) |
 | Troubleshooting | [troubleshooting](docs/en/troubleshooting.md) | [vianetsintä](docs/fi/troubleshooting.md) |
 | Interface spec | [`docs/asyncapi-tak-gateway.yaml`](docs/asyncapi-tak-gateway.yaml) | |

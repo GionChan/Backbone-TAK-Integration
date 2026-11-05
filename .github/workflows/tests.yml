@@ -53,6 +53,20 @@ jobs:
       - name: Install, check, uninstall
         run: ./tests/ci_install_windows.ps1
 
+  field-install-linux:
+    # Installs the Linux field package as a user would (systemd service with --at-boot, the
+    # default start, the template), checks the running relay, uninstalls. Lints every .sh file.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: shellcheck
+        run: shellcheck tools/field_package/linux/*.sh demo/*.sh tests/*.sh
+      - name: Install, check, uninstall
+        run: bash tests/ci_install_linux.sh
+
   docker:
     # Image build, Docker HEALTHCHECK, doctor in the container, compose files.
     runs-on: ubuntu-latest

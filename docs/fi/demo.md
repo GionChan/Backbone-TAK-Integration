@@ -65,6 +65,18 @@ natiivisti. Lokit tallentuvat kansioon `logs/`. Relay toimii Dockerissa, joten i
 TAK-sovellusten PLI julkaistaan vain `TAK_INGEST_UIDS`-listan uideille (aseta muuttuja
 komentotulkissa ennen käynnistystä).
 
+### Linux tai macOS yhdellä komennolla
+
+```bash
+demo/run-backbone-demo.sh --bundle-dir /polku/bundleen   # ensimmäinen kerta kopioi sertifikaatit
+demo/run-backbone-demo.sh                                # myöhemmät kerrat
+demo/run-backbone-demo.sh --no-swarm | --edge-ai | --edge-api | --stop
+```
+
+Toimii kuten Windows-käynnistin. CoT lähtee UDP:llä isännän porttiin 6969 (muutettavissa
+muuttujalla `TAK_UDP_TARGETS`). Linuxissa `demo/setup-certs.sh` antaa relayn kontille (UID 10001)
+lukuoikeuden `certs/`-kansioon ryhmän 10001 kautta sudo-oikeudella.
+
 ### Mikä tahansa käyttöjärjestelmä
 
 ```bash

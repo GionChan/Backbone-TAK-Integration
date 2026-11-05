@@ -63,6 +63,18 @@ WinTAK on 4242, PLI ingest and video on), the demo profile, and the strike-packa
 natively. Logs go to `logs/`. The relay runs in Docker, so PLI from TAK apps on the host is
 published only for uids in `TAK_INGEST_UIDS` (set it in the shell before starting).
 
+### Linux or macOS, one command
+
+```bash
+demo/run-backbone-demo.sh --bundle-dir /path/to/bundle   # first run copies certs
+demo/run-backbone-demo.sh                                # later runs
+demo/run-backbone-demo.sh --no-swarm | --edge-ai | --edge-api | --stop
+```
+
+The same as the Windows launcher. CoT goes by UDP to the host's 6969 (`TAK_UDP_TARGETS` changes
+it). On Linux `demo/setup-certs.sh` gives the relay container (UID 10001) read access to `certs/`
+through group 10001, with sudo.
+
 ### Any OS
 
 ```bash
