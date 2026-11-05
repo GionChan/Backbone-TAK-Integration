@@ -294,6 +294,7 @@ class LanguageTests(unittest.TestCase):
         for content in GENERATED_PS1.values():
             used |= set(re.findall(r"\(T\s+[\"']([a-z_]+)[\"']", content))
         used |= {f"mode_{m}" for m in pkg.MODES}  # built as T "mode_$Mode"
+        used |= {"share_set_0", "share_set_1"}  # built as T "share_set_$..."
         self.assertEqual(used - fi, set())
 
     def test_missing_certs_raises(self):
@@ -407,6 +408,7 @@ class LinuxPackageTests(unittest.TestCase):
             if name.endswith(".sh"):
                 used |= set(re.findall(r"\bT ([a-z_]+)\b", pkg.LINUX_TEMPLATES[name]))
         used |= {f"mode_{m}" for m in pkg.MODES}  # built as T "mode_$MODE"
+        used |= {"share_set_0", "share_set_1"}  # built as T "share_set_$..."
         self.assertEqual(used - known, set())
 
     def test_pins_match_the_builder(self):
@@ -427,6 +429,15 @@ class LinuxPackageTests(unittest.TestCase):
                     self.assertEqual(r.returncode, 0, f"{name}: {r.stderr}")
                 finally:
                     os.unlink(f.name)
+
+    def test_share_markers_preset_or_asked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with zipfile.ZipFile(_build(tmp)) as z:
+                self.assertIn("# TAK_SHARE_MARKERS=", z.read("device.env").decode())   # asked at install
+            with zipfile.ZipFile(_build(tmp, share_markers=True)) as z:
+                self.assertIn("\nTAK_SHARE_MARKERS=1\n", z.read("device.env").decode())
+            with zipfile.ZipFile(_build(tmp, share_markers=False)) as z:
+                self.assertIn("\nTAK_SHARE_MARKERS=0\n", z.read("device.env").decode())
 
     def test_unknown_platform_is_an_error(self):
         with tempfile.TemporaryDirectory() as tmp, self.assertRaises(SystemExit):

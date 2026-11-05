@@ -12,8 +12,9 @@ A two-way bridge between the **EFDI goat fabric** (Zenoh over mTLS on a NetBird 
   vendor-specific track formats and your own JSON telemetry (full list in
   [relay](docs/en/relay.md#recognised-formats)). Messages are validated, rate-limited and
   de-duplicated before they reach a client.
-- **TAK → backbone.** Optional: friendly position reports (PLI) from your own TAK users are
-  published to the backbone.
+- **TAK → backbone.** Optional, each with its own switch: friendly position reports (PLI) from
+  your own TAK users, and the markers and drawings they make. Messages (GeoChat) never leave the
+  TAK network.
 - **Operations.** Mandatory fabric heartbeat, `/healthz`, Prometheus `/metrics`, `/status`, a
   `/streams` view of live backbone traffic, a watchdog that restarts the relay when the link or
   the feed dies, and an optional video restream (RTSP) to TAK.
@@ -57,8 +58,8 @@ Choose how TAK devices get the picture with `TAK_MODE` in `.env`: `direct` (defa
 - **A TAK Server:** set `TAK_SERVER` and its .p12 files in `.env`; every user on the server then
   sees the backbone. See [relay: TAK Server](docs/en/relay.md#tak-server).
 
-Only your own devices' positions go to the backbone, and only with `TAK_INGEST=1`; TAK Server
-users never do.
+Only your own devices go to the backbone: positions with `TAK_INGEST=1`, markers and drawings
+with `TAK_SHARE_MARKERS=1`. TAK Server users never do.
 
 Field devices without Docker: build a self-installing package with
 `python tools/make_relay_package.py --system <name>` (Windows) or add `--platform linux` (Linux,

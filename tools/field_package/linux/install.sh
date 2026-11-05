@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # TAK relay installer (Linux).
 #   1. language (fi / en)   2. certificate bundle and device name (template package only)
-#   3. mode (direct / local network / TAK Server) and its questions   4. dependencies
+#   3. mode (direct / local network / TAK Server) and its questions, sharing markers   4. dependencies
 #   5. permissions   6. automatic start   7. start now and check /status   8. what to set in TAK
 # Choices are saved in device.env; a choice already there is not asked again.
 #
@@ -215,6 +215,17 @@ if [ "$MODE" = multicast ]; then
         [ -z "$REPLY" ] || set_env TAK_INGEST_UIDS "$REPLY"
     fi
 fi
+
+# ---- sharing markers and drawings (off or on; device.env keeps the answer)
+if [ "${TAK_SHARE_MARKERS:-}" != 0 ] && [ "${TAK_SHARE_MARKERS:-}" != 1 ]; then
+    echo
+    T share_title
+    T share_1
+    T share_2
+    choose 1 2
+    if [ "$REPLY" = 2 ]; then set_env TAK_SHARE_MARKERS 1; else set_env TAK_SHARE_MARKERS 0; fi
+fi
+T "share_set_$TAK_SHARE_MARKERS"
 
 # ---- 4. dependencies
 bootstrap

@@ -43,6 +43,8 @@ tai `.tar.gz`) ja laitteen nimen. Sen jälkeen se kysyy:
 3. **Tilan lisätiedot:** suorassa tilassa minne CoT lähtee UDP:llä ja minkä muiden laitteiden
    oman sijainnin saa julkaista; TAK Server -tilassa serverin osoitteen, varmenteet ja salasanan;
    lähiverkkotilassa ne laitteet, joiden oman sijainnin saa julkaista.
+4. **Merkkien ja piirrosten jako:** pois tai päälle (kaikki CoT-merkit ja piirrokset, myös
+   vihollismerkit, menevät backboneen; viestit eivät koskaan).
 
 Ilman uid-listaa backboneen saavat julkaista sijaintinsa vain tämän koneen TAK-sovellukset. TAK
 Serverin käyttäjien sijainteja ei julkaista koskaan.

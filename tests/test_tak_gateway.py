@@ -159,6 +159,87 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(self._published(), [])
         self.assertEqual(gw.COUNTERS['gateway_ingest_dropped_total{reason="relayed"}'], 1)
 
+    @staticmethod
+    def _marker(uid, creator="ANDROID-own1", typ="a-h-G", now=None):
+        # What ATAK sends for a marker or drawing: the creator in <link relation="p-p">.
+        ev = bc.make_cot(uid, typ, 60.2, 25.0, now=now)
+        return ev.replace(b"<detail>", f'<detail><link uid="{creator}" relation="p-p" type="a-f-G-U-C"/>'.encode(), 1)
+
+    def _sharing(self, on=True, uids=frozenset(), any_device=False):
+        for name, value in (("SHARE_MARKERS", on), ("INGEST_UIDS", uids), ("ANY_DEVICE", any_device),
+                            ("_marker_limiter", cot_guard.RateLimiter(1.0)), ("_published_markers", {})):
+            p = mock.patch.object(gw, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_markers_off_by_default(self):
+        gw.ingest_event(self._marker("m-1"), "udp_in@127.0.0.1")
+        self.assertEqual(self._published(), [])
+        self.assertEqual(gw.COUNTERS['gateway_ingest_dropped_total{reason="markers-off"}'], 1)
+
+    def test_marker_goes_to_the_cot_key_not_pli(self):
+        self._sharing()
+        gw.ingest_event(self._marker("m-1", typ="a-h-G"), "udp_in@127.0.0.1")
+        gw.ingest_event(self._marker("d-1", typ="u-d-f"), "udp_in@127.0.0.1")   # a drawing
+        self.assertEqual(self._published(), [f"{gw.gc.ORG}/tak/cot/v1/m-1", f"{gw.gc.ORG}/tak/cot/v1/d-1"])
+
+    def test_markers_work_without_pli(self):
+        self._sharing()
+        gw.INGEST[0] = False
+        gw.ingest_event(self._marker("m-1"), "udp_in@127.0.0.1")
+        gw.ingest_event(self._pli("ANDROID-own1"), "udp_in@127.0.0.1")
+        self.assertEqual(self._published(), [f"{gw.gc.ORG}/tak/cot/v1/m-1"])
+
+    def test_messages_never_leave(self):
+        self._sharing()
+        chat = bc.make_cot("GeoChat.ANDROID-own1.All Chat Rooms.1", "b-t-f", 60.2, 25.0)
+        gw.ingest_event(chat, "udp_in@127.0.0.1")
+        gw.ingest_event(self._marker("GeoChat.x", typ="b-t-f"), "udp_in@127.0.0.1")
+        self.assertEqual(self._published(), [])
+        self.assertEqual(gw.COUNTERS['gateway_ingest_dropped_total{reason="chat"}'], 2)
+
+    def test_allowlist_is_for_the_creator(self):
+        self._sharing(uids=frozenset({"ANDROID-own1"}))
+        gw.ingest_event(self._marker("m-1", creator="ANDROID-own1"), "udp_in@192.168.1.5")
+        gw.ingest_event(self._marker("m-2", creator="ANDROID-stranger"), "udp_in@192.168.1.6")
+        self.assertEqual(self._published(), [f"{gw.gc.ORG}/tak/cot/v1/m-1"])
+
+    def test_star_lets_any_device_on_the_network(self):
+        self._sharing(uids=frozenset({"*"}), any_device=True)
+        gw.ingest_event(self._marker("m-1", creator="ANDROID-x"), "tcp_server:8087@10.0.0.9:5000")
+        gw.ingest_event(self._pli("ANDROID-x"), "udp_in@10.0.0.9")
+        self.assertEqual(self._published(), [f"{gw.gc.ORG}/tak/cot/v1/m-1", f"{gw.gc.ORG}/tak/pli/v1/ANDROID-x"])
+
+    def test_without_list_only_this_machine(self):
+        self._sharing()
+        gw.ingest_event(self._marker("m-1"), "udp_in@192.168.1.5")
+        self.assertEqual(self._published(), [])
+        self.assertEqual(gw.COUNTERS['gateway_ingest_dropped_total{reason="not-loopback"}'], 1)
+
+    def test_deletion_follows_only_our_markers(self):
+        self._sharing()
+
+        def delete(target):
+            ev = bc.make_cot(f"del-{target}", "t-x-d-d", 0, 0)
+            return ev.replace(b"<detail>", f'<detail><link uid="{target}" relation="none" type="a-h-G"/>'
+                                           f'<__forcedelete/>'.encode(), 1)
+        gw.ingest_event(delete("m-1"), "udp_in@127.0.0.1")         # never published: stays on TAK
+        gw.ingest_event(self._marker("m-1"), "udp_in@127.0.0.1")
+        gw.ingest_event(delete("m-1"), "udp_in@127.0.0.1")
+        key = f"{gw.gc.ORG}/tak/cot/v1/m-1"
+        self.assertEqual(self._published(), [key, key])
+        self.assertEqual(gw.COUNTERS['gateway_ingest_dropped_total{reason="delete-unknown"}'], 1)
+        self.assertNotIn("m-1", gw._published_markers)
+
+    def test_markers_the_relay_sent_are_not_echoed_back(self):
+        self._sharing()
+        gw.OUTPUTS[:] = [_Capture()]
+        event = self._marker("vendor-z.mark-1", creator="vendor-z", now=1_800_000_000)
+        gw.dispatch(event)                                   # backbone -> TAK (tagged)
+        gw.ingest_event(gw.OUTPUTS[0].sent[0], "udp_in@127.0.0.1")   # a TAK app shares it back, tag kept
+        gw.ingest_event(event, "udp_in@127.0.0.1")           # or untagged
+        self.assertEqual(self._published(), [])
+
     def test_tcp_client_link_reads_as_server(self):
         a, b = socket.socketpair()
         with mock.patch.object(gw, "ingest_event") as ing:

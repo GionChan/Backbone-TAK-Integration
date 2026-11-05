@@ -19,7 +19,8 @@ python tools/make_relay_package.py --system field-relay-01                   # �
 | `--lang` | asked at install | `fi` or `en`: language of the installer and its messages |
 | `--mode` | asked at install | `direct`, `multicast` or `server` ([modes](modes.md)) |
 | `--tak-server`, `--tak-p12`, `--tak-trust-p12` | — | `server` mode: address and .p12 files (copied to `certs/tak/`). The password is asked at install |
-| `--ingest-uids` | — | `TAK_INGEST_UIDS`: device uids allowed to publish |
+| `--ingest-uids` | — | `TAK_INGEST_UIDS`: device uids allowed to publish (`*` = any) |
+| `--share-markers` | asked at install | `on` or `off`: `TAK_SHARE_MARKERS`, markers and drawings to the backbone |
 | `--cert-dir` | `./certs` | Bundle to include (one cert/key pair + CA) |
 | `--tak-host`, `--tak-udp-port` | `127.0.0.1`, `6969` | Where the TAK terminal listens for CoT |
 | `--tak-port` | `8087` | TCP stream port |
@@ -51,6 +52,8 @@ and its SHA256.
    2. **Mode:** direct, local network or TAK Server ([modes](modes.md)).
    3. **Details for the mode:** TAK Server address, .p12 files and password; in local-network mode
       the device uids whose position may be published.
+   4. **Sharing markers and drawings:** off, or on (every CoT marker and drawing, hostile ones
+      too, goes to the backbone; messages never).
 
    Anything preset with `make_relay_package.py` is not asked. The answers go to `device.env`.
    Then it registers automatic start (with `--no-bundled-python` it first creates a venv and

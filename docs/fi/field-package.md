@@ -19,7 +19,8 @@ python tools/make_relay_package.py --system field-relay-01                   # �
 | `--lang` | kysytään asennuksessa | `fi` tai `en`: asentimen ja sen viestien kieli |
 | `--mode` | kysytään asennuksessa | `direct`, `multicast` tai `server` ([tilat](modes.md)) |
 | `--tak-server`, `--tak-p12`, `--tak-trust-p12` | – | `server`-tila: osoite ja .p12-tiedostot (kopioidaan kansioon `certs/tak/`). Salasana kysytään asennuksessa |
-| `--ingest-uids` | – | `TAK_INGEST_UIDS`: laitteiden uidit, joiden sijainnin saa julkaista |
+| `--share-markers` | kysytään asennuksessa | `on` tai `off`: `TAK_SHARE_MARKERS`, merkit ja piirrokset backboneen |
+| `--ingest-uids` | – | `TAK_INGEST_UIDS`: laitteiden uidit (`*` = kaikki), joiden sijainnin saa julkaista |
 | `--cert-dir` | `./certs` | Mukaan otettava bundle (yksi sertifikaatti- ja avainpari + CA) |
 | `--tak-host`, `--tak-udp-port` | `127.0.0.1`, `6969` | Missä TAK-pääte kuuntelee CoT:tä |
 | `--tak-port` | `8087` | TCP-striimin portti |
@@ -52,6 +53,8 @@ versionhallinnan ulkopuolelle.
    2. **Tilan:** suora, lähiverkko tai TAK Server ([tilat](modes.md)).
    3. **Tilan lisätiedot:** TAK Serverin osoite, .p12-tiedostot ja salasana; lähiverkkotilassa
       niiden laitteiden uidit, joiden sijainnin saa julkaista.
+   4. **Merkkien ja piirrosten jako:** pois tai päälle (kaikki CoT-merkit ja piirrokset, myös
+      vihollismerkit, menevät backboneen; viestit eivät koskaan).
 
    Mitä on valittu valmiiksi `make_relay_package.py`:llä, sitä ei kysytä. Vastaukset tallentuvat
    tiedostoon `device.env`. Sen jälkeen asennin rekisteröi automaattisen käynnistyksen

@@ -42,6 +42,8 @@ bundle (folder, `.zip` or `.tar.gz`) and the device name. Then it asks for:
 3. **Details for the mode:** in direct mode where CoT goes by UDP and which other devices may
    publish their own position; in TAK Server mode the server address, certificates and password;
    in local-network mode the devices whose own position may be published.
+4. **Sharing markers and drawings:** off, or on (every CoT marker and drawing, hostile ones
+   too, goes to the backbone; messages never).
 
 Without a list of device uids only TAK apps on this machine may publish their position to the
 backbone. TAK Server users are never published.

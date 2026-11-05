@@ -236,13 +236,16 @@ def check_tak_side(m) -> None:
     ingest = os.environ.get("TAK_INGEST", "0") == "1"
     sources = os.environ.get("TAK_INGEST_FROM") or tak_links.default_ingest_from(m or "direct")
     uids = os.environ.get("TAK_INGEST_UIDS", "")
-    detail = f"on, from {sources}, devices {uids or 'on this machine only'}" if ingest else "off (nothing is published from TAK)"
-    if ingest and not uids and os.path.exists("/.dockerenv"):
-        report("WARN", "PLI to backbone", detail + ", but in Docker nothing arrives from this machine",
-               "set TAK_INGEST_UIDS=<device uids>: packets from the host do not come from 127.0.0.1")
-        return
+    share = os.environ.get("TAK_SHARE_MARKERS", "0") == "1"
+    devices = "any device" if "*" in uids.split(",") else uids or "on this machine only"
+    detail = f"on, from {sources}, devices {devices}" if ingest else "off (nothing is published from TAK)"
     report("WARN" if ingest and "server" in sources else "INFO", "PLI to backbone", detail,
            "TAK_INGEST_FROM=server publishes every TAK Server user's position to the backbone")
+    report("INFO", "markers to backbone", f"on: every CoT marker and drawing, devices {devices}"
+           if share else "off (TAK_SHARE_MARKERS=1 shares markers and drawings; messages never)")
+    if (ingest or share) and not uids and os.path.exists("/.dockerenv"):
+        report("WARN", "TAK to backbone", "in Docker nothing arrives from this machine",
+               "set TAK_INGEST_UIDS=<device uids> (or *): packets from the host do not come from 127.0.0.1")
 
 
 def main() -> int:
