@@ -104,14 +104,14 @@ open_bundle() {
 
 # ---- 1. language
 RELAY_LANG=${LANG_ARG:-${RELAY_LANG:-}}
-if [ "$RELAY_LANG" != fi ] && [ "$RELAY_LANG" != en ]; then
+if [ "$RELAY_LANG" != "fi" ] && [ "$RELAY_LANG" != "en" ]; then
     printf '\nValitse kieli / Choose language\n  1) Suomi\n  2) English\n'
     for ((try = 1; ; try++)); do
         printf 'Valinta / Choice: '
         IFS= read -r a || a=""
         case ${a//[[:space:]]/} in
-            1) RELAY_LANG=fi; break ;;
-            2) RELAY_LANG=en; break ;;
+            1) RELAY_LANG="fi"; break ;;
+            2) RELAY_LANG="en"; break ;;
         esac
         [ "$try" -lt 10 ] || { echo "Liian monta virheellistä vastausta / Too many invalid answers." >&2; exit 1; }
     done
@@ -313,7 +313,7 @@ esac
 
 # ---- 8. what to set in TAK
 echo
-T done
+T install_done
 case $METHOD in
     system) T autostart_system "$UNIT" ;;
     user) T autostart_user "$UNIT" ;;

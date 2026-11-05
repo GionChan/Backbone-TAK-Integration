@@ -53,7 +53,7 @@ fi|healthy|==> Relay on käynnissä ja kunnossa.
 fi|not_healthy|==> Relay käynnistyi, mutta ei ole vielä kunnossa: %s
 fi|not_healthy_hint|    Tavallisin syy on puuttuva NetBird-yhteys. Tarkista komennolla 'netbird status'.
 fi|no_answer|==> Relay ei vielä vastaa portissa %s. Ensimmäinen käynnistys voi kestää hetken.
-fi|done|Asennus valmis.
+fi|install_done|Asennus valmis.
 fi|autostart_user|Automaattinen käynnistys: käyttäjän systemd-palvelu %s (kirjautuessa).
 fi|autostart_system|Automaattinen käynnistys: systemd-palvelu %s (koneen käynnistyessä).
 fi|autostart_cron|Automaattinen käynnistys: crontabin @reboot-rivi.
@@ -125,7 +125,7 @@ en|healthy|==> The relay is running and healthy.
 en|not_healthy|==> The relay started but is not healthy yet: %s
 en|not_healthy_hint|    The usual cause is a missing NetBird connection. Check with 'netbird status'.
 en|no_answer|==> The relay does not answer on port %s yet. The first start can take a moment.
-en|done|Installation complete.
+en|install_done|Installation complete.
 en|autostart_user|Automatic start: systemd user service %s (at sign-in).
 en|autostart_system|Automatic start: systemd service %s (when the machine starts).
 en|autostart_cron|Automatic start: @reboot line in crontab.
