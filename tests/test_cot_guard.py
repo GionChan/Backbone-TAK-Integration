@@ -1,6 +1,7 @@
 import sys
 import time
 import unittest
+import unittest.mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -61,6 +62,17 @@ class GuardTests(unittest.TestCase):
         # A long comment first must not push the DTD past the check.
         padded = b"<!--" + b"x" * 5000 + b'--><!DOCTYPE event [<!ENTITY e "x">]>' + event()
         self.assertEqual(g.validate_cot(padded)[1], "dtd-not-allowed")
+
+    def test_rate_limiter_forgets_idle_keys_and_is_bounded(self):
+        r = g.RateLimiter(2)
+        for i in range(1000):
+            r.allow(f"k{i}", 1000.0)
+        r.allow("late", 1100.0)                      # everything else idle for 100 s
+        self.assertEqual(list(r.last), ["late"])
+        with unittest.mock.patch.object(g.RateLimiter, "MAX_KEYS", 10):
+            for i in range(50):
+                r.allow(f"n{i}", 1100.5)
+            self.assertEqual(len(r.last), 10)
 
     def test_rate_limiter(self):
         r = g.RateLimiter(2)

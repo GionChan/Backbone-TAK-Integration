@@ -33,7 +33,7 @@ services:
   tak-relay:
     <<: *fabric
     build: {context: ., target: relay}
-    image: efdi-tak-relay:1.2.0
+    image: efdi-tak-relay:1.2.1
     environment:
       <<: *fabric-env
       GATEWAY_SYSTEM: ${GATEWAY_SYSTEM:-tak-gateway}

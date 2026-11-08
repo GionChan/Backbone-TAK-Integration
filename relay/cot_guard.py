@@ -3,6 +3,7 @@
 Other vendors' CoT is forwarded verbatim, so a malformed event must not reach
 a TAK client (some have crashed on odd input). Pure functions, no I/O.
 """
+import collections
 import re
 import threading
 import time
@@ -81,9 +82,11 @@ def uid_of(data: bytes) -> str:
 class RateLimiter:
     """Allow at most `max_hz` events per key per second."""
 
+    MAX_KEYS = 50000
+
     def __init__(self, max_hz: float = 2.0):
         self.gap = 1.0 / max_hz if max_hz > 0 else 0.0
-        self.last = {}
+        self.last = collections.OrderedDict()  # key -> last allowed time, oldest first
         self._lock = threading.Lock()  # called from several Zenoh callback threads
 
     def allow(self, key: str, now: float = None) -> bool:
@@ -95,7 +98,9 @@ class RateLimiter:
             if prev is not None and now - prev < self.gap:
                 return False
             self.last[key] = now
-            if len(self.last) > 5000:
-                cutoff = now - 60
-                self.last = {k: v for k, v in self.last.items() if v > cutoff}
+            self.last.move_to_end(key)
+            # Forget keys idle for a minute, oldest first: amortised O(1) per call, never a rebuild of
+            # the whole table on the hot path. A hard cap bounds memory under a flood of new keys.
+            while self.last and (len(self.last) > self.MAX_KEYS or next(iter(self.last.values())) < now - 60):
+                self.last.popitem(last=False)
         return True

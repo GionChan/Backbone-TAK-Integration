@@ -92,6 +92,7 @@ certificates everything runs against the local router, offline. See the [demo gu
 | Field-device package (Windows and Linux, no Docker) | [field package](docs/en/field-package.md) | [kenttäpaketti](docs/fi/field-package.md) |
 | Releasing: image, field-package template | [release](docs/en/release.md) | [julkaisu](docs/fi/release.md) |
 | Troubleshooting | [troubleshooting](docs/en/troubleshooting.md) | [vianetsintä](docs/fi/troubleshooting.md) |
+| Field test with real TAK devices (checklist) | [field test](docs/en/field-test.md) | [kenttätesti](docs/fi/field-test.md) |
 | Interface spec | [`docs/asyncapi-tak-gateway.yaml`](docs/asyncapi-tak-gateway.yaml) | |
 | Changes | [CHANGELOG](CHANGELOG.md) | |
 

@@ -93,6 +93,7 @@ sertifikaatteja kaikki toimii paikallista reititintä vasten ilman verkkoyhteytt
 | Kenttälaitepaketti (Windows ja Linux, ei Dockeria) | [kenttäpaketti](docs/fi/field-package.md) | [field package](docs/en/field-package.md) |
 | Julkaiseminen: image, kenttäpaketin pohja | [julkaisu](docs/fi/release.md) | [release](docs/en/release.md) |
 | Vianetsintä | [vianetsintä](docs/fi/troubleshooting.md) | [troubleshooting](docs/en/troubleshooting.md) |
+| Kenttätesti oikeilla TAK-laitteilla (tarkistuslista) | [kenttätesti](docs/fi/field-test.md) | [field test](docs/en/field-test.md) |
 | Rajapintakuvaus | [`docs/asyncapi-tak-gateway.yaml`](docs/asyncapi-tak-gateway.yaml) | |
 | Muutokset | [CHANGELOG](CHANGELOG.md) | |
 
