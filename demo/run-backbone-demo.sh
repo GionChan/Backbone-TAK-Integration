@@ -69,10 +69,15 @@ export TAK_UDP_TARGETS=${TAK_UDP_TARGETS:-host.docker.internal:6969}
 export TAK_INGEST=1 GATEWAY_VIDEO=1
 # RTSP address in the video markers: TAK apps on this machine. For phones, set your LAN IP first.
 export GATEWAY_VIDEO_HOST=${GATEWAY_VIDEO_HOST:-127.0.0.1}
+# On the real fabric the control panel and the edge-AI API publish under the org's identity: tokens.
+LIVE_MAP_TOKEN=${LIVE_MAP_TOKEN:-$(python3 -c 'import secrets; print(secrets.token_hex(16))')}
+EDGE_API_TOKEN=${EDGE_API_TOKEN:-$(python3 -c 'import secrets; print(secrets.token_hex(16))')}
+export LIVE_MAP_TOKEN EDGE_API_TOKEN
 svc=()
 [ "$no_swarm" = 0 ] || svc=(tak-relay zenoh-router live-map)
 docker compose --profile demo up -d --build ${svc[@]+"${svc[@]}"}
 echo "==> relay + demo stack up  (map http://localhost:8080, relay status http://localhost:8088/status)"
+echo "==> control panel: http://localhost:8080/control?token=$LIVE_MAP_TOKEN"
 
 # 4. native scenario: 10 strike-package tracks from THIS peer, through the fabric
 nohup python3 -u demo/scenarios/strike_package.py > "$logs/strike.out.log" 2> "$logs/strike.err.log" &
@@ -87,6 +92,7 @@ fi
 if [ "$edge_api" = 1 ]; then
     docker compose --profile edge-api up -d --build edge-api
     echo "==> edge-api up  (http://localhost:8090  GET /intake/frames  POST /detections/cot)"
+    echo "    Authorization: Bearer $EDGE_API_TOKEN"
 fi
 
 echo

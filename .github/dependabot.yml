@@ -1,0 +1,7 @@
+# Actions are pinned to commit SHAs (a tag can be moved); Dependabot proposes the updates as PRs.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

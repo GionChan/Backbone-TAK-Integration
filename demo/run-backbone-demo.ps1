@@ -70,9 +70,13 @@ $env:TAK_INGEST = "1"
 $env:GATEWAY_VIDEO = "1"
 # RTSP address in the video markers: TAK apps on this machine. For phones, set your LAN IP first.
 if (-not $env:GATEWAY_VIDEO_HOST) { $env:GATEWAY_VIDEO_HOST = "127.0.0.1" }
+# On the real fabric the control panel and the edge-AI API publish under the org's identity: tokens.
+if (-not $env:LIVE_MAP_TOKEN) { $env:LIVE_MAP_TOKEN = [guid]::NewGuid().ToString("N") }
+if (-not $env:EDGE_API_TOKEN) { $env:EDGE_API_TOKEN = [guid]::NewGuid().ToString("N") }
 $svc = if ($NoSwarm) { @("tak-relay", "zenoh-router", "live-map") } else { @() }
 docker compose --profile demo up -d --build @svc
 Write-Host "==> relay + demo stack up  (map http://localhost:8080, relay status http://localhost:8088/status)" -ForegroundColor Green
+Write-Host "==> control panel: http://localhost:8080/control?token=$env:LIVE_MAP_TOKEN" -ForegroundColor Green
 
 # 4. native scenario: 10 strike-package tracks from THIS peer, through the fabric
 Start-Process python -ArgumentList "-u", "demo\scenarios\strike_package.py" -WorkingDirectory $root `
@@ -87,6 +91,7 @@ if ($EdgeAI) {
 if ($EdgeApi) {
     docker compose --profile edge-api up -d --build edge-api
     Write-Host "==> edge-api up  (http://localhost:8090  GET /intake/frames  POST /detections/cot)" -ForegroundColor Green
+    Write-Host "    Authorization: Bearer $env:EDGE_API_TOKEN" -ForegroundColor Green
 }
 
 Write-Host ""

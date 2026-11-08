@@ -9,6 +9,7 @@ Env:   GOAT_MAP_PORT  HTTP port (default 8080); identity/router: see relay/goat_
 Run:   python demo/live_map.py      Open: http://localhost:8080  (control: /control)
 """
 
+import hmac
 import json
 import os
 import queue
@@ -29,6 +30,10 @@ _clients: list[queue.Queue] = []
 _lock = threading.Lock()
 _zen_session = None
 _sender = None
+# On the real fabric /inject publishes under the org's identity: it needs this token (the demo
+# launcher makes one), sent by the control panel opened as /control?token=<token>.
+_INJECT_TOKEN = os.environ.get("LIVE_MAP_TOKEN", "")
+_REAL = _gc.ORG != "local"
 
 
 def _netbird_ip():
@@ -686,7 +691,8 @@ function logTx(msg, ok){
 function send(payload){
   return fetch('/inject',{
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    headers:{'Content-Type':'application/json',
+             'X-Inject-Token':new URLSearchParams(location.search).get('token')||''},
     body: JSON.stringify(payload)
   }).then(r=>r.json()).then(r=>{
     const uid = (payload.source||'?').replace('hostile-uav-','UAV-').toUpperCase();
@@ -879,7 +885,10 @@ def _subscribe() -> None:
         subs = [s.declare_subscriber(k, on_sample) for k in keys]  # noqa: F841
         print(f"[live-map] subscribed {', '.join(keys)}")
         print(f"[live-map] subscribed — open http://localhost:{_PORT}")
-        print(f"[live-map] control panel — open http://localhost:{_PORT}/control")
+        if _REAL and not _INJECT_TOKEN:
+            print("[live-map] real fabric and no LIVE_MAP_TOKEN: the control panel cannot inject")
+        token = f"?token={_INJECT_TOKEN}" if _REAL and _INJECT_TOKEN else ""
+        print(f"[live-map] control panel — open http://localhost:{_PORT}/control{token}")
         while True:
             time.sleep(1)
 
@@ -889,15 +898,16 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
-        if self.path == "/events":
+        path = self.path.split("?", 1)[0]  # /control?token=...
+        if path == "/events":
             self._sse()
-        elif self.path == "/control":
+        elif path == "/control":
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(_CTRL_LEN))
             self.end_headers()
             self.wfile.write(_CTRL_HTML)
-        elif self.path == "/example.csv":
+        elif path == "/example.csv":
             self.send_response(200)
             self.send_header("Content-Type", "text/csv; charset=utf-8")
             self.send_header("Content-Disposition", 'attachment; filename="mission_example.csv"')
@@ -916,15 +926,26 @@ class _Handler(BaseHTTPRequestHandler):
             self._inject()
 
     def _inject(self):
+        # Read the body before any answer: closing with unread data can reset the connection.
+        try:
+            body = self.rfile.read(min(int(self.headers.get("Content-Length", 0)), 65536))
+        except ValueError:
+            body = b""
         # JSON only: a web page can send text/plain to this port without a CORS preflight, but not
         # application/json (and no Access-Control-Allow-Origin is sent back).
         if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
             self.send_response(415)
             self.end_headers()
             return
+        if _REAL and not (_INJECT_TOKEN and hmac.compare_digest(
+                self.headers.get("X-Inject-Token", "").encode(), _INJECT_TOKEN.encode())):
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"error":"real fabric: open the control panel as /control?token=<LIVE_MAP_TOKEN>"}')
+            return
         try:
-            length = int(self.headers.get("Content-Length", 0))
-            d = json.loads(self.rfile.read(length))
+            d = json.loads(body)
             uid = str(d.pop("source", "hostile-uav-04"))
             lat, lon = float(d.pop("lat")), float(d.pop("lon"))
             fields = {k: float(d.pop(k)) for k in ("alt", "heading", "speed_kmh") if k in d}

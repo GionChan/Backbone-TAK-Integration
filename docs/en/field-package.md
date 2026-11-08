@@ -62,6 +62,8 @@ and its SHA256.
      scheduled tasks, it falls back to a shortcut in the Startup folder.
    - Kiosk machines with no logged-in user: `install.ps1 -AtSystemStartup` in an admin
      PowerShell (at system start, as SYSTEM).
+   - The installer limits the folder to the installing user, SYSTEM and Administrators, so other
+     users of the machine can neither read the key nor change the scripts SYSTEM runs.
 3. Direct mode only: point the terminal's CoT input at `device.env`'s `TAK_UDP_PORT` (default
    6969), and its UDP output at `TAK_UDP_IN_PORT` if PLI is wanted. Local-network and TAK
    Server modes need nothing in TAK.
