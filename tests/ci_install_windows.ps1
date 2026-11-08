@@ -142,9 +142,9 @@ Test-Install "en-direct" "ci-relay-en" @("2", "1", "1") `
     @("Choose language", "Installation complete.", "Next, in the TAK app:", "Set the CoT input to UDP port 6969") `
     -HidePython
 
-# 2. Finnish, local network, one device uid, no bundled Python. Answers: 1 = Suomi, 2 = multicast, the uid,
-#    2 = share markers.
-Test-Install "fi-multicast" "ci-relay-fi" @("1", "2", "ANDROID-ci", "2") `
+# 2. Finnish, local network, one device uid, no bundled Python. Answers: 1 = Suomi, 2 = multicast,
+#    2 = share markers, the uid.
+Test-Install "fi-multicast" "ci-relay-fi" @("1", "2", "2", "ANDROID-ci") `
     @{ RELAY_LANG = "fi"; TAK_MODE = "multicast"; TAK_INGEST_UIDS = "ANDROID-ci"; TAK_SHARE_MARKERS = "1" } `
     @("Valitse kieli", "Asennus valmis.", "Seuraavaksi TAK-ohjelmaan:", "Merkkien ja piirrosten jako: päällä") `
     -BuildArgs @("--no-bundled-python")

@@ -19,10 +19,20 @@ if [ "${1:-}" = "--check-only" ]; then
 fi
 
 mkdir -p "$HERE/logs"
+log_lines() {
+    # Each line into the log of its own day (a relay that runs for weeks does not keep writing the
+    # first day's file); on a terminal also to the screen. Logs older than 14 days are deleted.
+    local line day
+    while IFS= read -r line; do
+        printf -v day '%(%Y%m%d)T' -1
+        printf '%s\n' "$line" >> "$HERE/logs/relay-$day.log"
+        [ ! -t 1 ] || printf '%s\n' "$line"
+    done
+}
 while true; do
-    log=$HERE/logs/relay-$(date +%Y%m%d).log
-    T starting "$(date +%H:%M:%S)" "$log"
-    "$VENV_PY" -u "$HERE/app/tak_gateway.py" 2>&1 | tee -a "$log"
+    find "$HERE/logs" -name 'relay-*.log' -mtime +14 -delete 2> /dev/null || true
+    T starting "$(date +%H:%M:%S)" "$HERE/logs/relay-$(date +%Y%m%d).log"
+    "$VENV_PY" -u "$HERE/app/tak_gateway.py" 2>&1 | log_lines
     T stopped "$(date +%H:%M:%S)" "${PIPESTATUS[0]}"
     sleep 10
 done

@@ -27,7 +27,7 @@ while [ $# -gt 0 ]; do
 done
 case $LANG_ARG in "" | fi | en) ;; *) echo "--lang: fi | en" >&2; exit 2 ;; esac
 case $MODE_ARG in "" | direct | multicast | server) ;; *) echo "--mode: direct | multicast | server" >&2; exit 2 ;; esac
-[ -f "$ENV_FILE" ] || { echo "device.env puuttuu / is missing: make_relay_package.py" >&2; exit 1; }
+[ -f "$ENV_FILE" ] || { T no_env >&2; exit 1; }
 load_env "$ENV_FILE"
 # The relay, its venv and device.env belong to the user who runs it; root would own them all.
 if [ "$(id -u)" -eq 0 ]; then T no_root >&2; exit 1; fi
@@ -170,7 +170,19 @@ esac
 set_env TAK_MODE "$MODE"
 T mode_set "$(T "mode_$MODE")"
 
+# ---- sharing markers and drawings (off or on; device.env keeps the answer)
+if [ "${TAK_SHARE_MARKERS:-}" != 0 ] && [ "${TAK_SHARE_MARKERS:-}" != 1 ]; then
+    echo
+    T share_title
+    T share_1
+    T share_2
+    choose 1 2
+    if [ "$REPLY" = 2 ]; then set_env TAK_SHARE_MARKERS 1; else set_env TAK_SHARE_MARKERS 0; fi
+fi
+T "share_set_$TAK_SHARE_MARKERS"
+
 # ---- questions for the mode
+publishes() { [ "${TAK_INGEST:-0}" = 1 ] || [ "${TAK_SHARE_MARKERS:-0}" = 1 ]; }
 if [ "$MODE" = direct ]; then
     # On Linux the TAK apps are usually on other devices: ask where CoT goes, and whose PLI counts.
     if [ -z "${TAK_UDP_TARGETS:-}" ]; then
@@ -182,7 +194,7 @@ if [ "$MODE" = direct ]; then
             stop_after "$try"
         done
     fi
-    if [ "${TAK_INGEST:-0}" = 1 ] && [ -z "${TAK_INGEST_UIDS:-}" ]; then
+    if publishes && [ -z "${TAK_INGEST_UIDS:-}" ]; then
         ask "$(T direct_uids)"
         [ -z "$REPLY" ] || set_env TAK_INGEST_UIDS "$REPLY"
     fi
@@ -210,22 +222,11 @@ if [ "$MODE" = server ]; then
 fi
 if [ "$MODE" = multicast ]; then
     T mc_warning
-    if [ "${TAK_INGEST:-0}" = 1 ] && [ -z "${TAK_INGEST_UIDS:-}" ]; then
+    if publishes && [ -z "${TAK_INGEST_UIDS:-}" ]; then
         ask "$(T mc_uids)"
         [ -z "$REPLY" ] || set_env TAK_INGEST_UIDS "$REPLY"
     fi
 fi
-
-# ---- sharing markers and drawings (off or on; device.env keeps the answer)
-if [ "${TAK_SHARE_MARKERS:-}" != 0 ] && [ "${TAK_SHARE_MARKERS:-}" != 1 ]; then
-    echo
-    T share_title
-    T share_1
-    T share_2
-    choose 1 2
-    if [ "$REPLY" = 2 ]; then set_env TAK_SHARE_MARKERS 1; else set_env TAK_SHARE_MARKERS 0; fi
-fi
-T "share_set_$TAK_SHARE_MARKERS"
 
 # ---- 4. dependencies
 bootstrap
@@ -241,9 +242,6 @@ T perms
 # ---- 6. automatic start
 SYSTEM=${GATEWAY_SYSTEM:-tak-relay}
 HTTP_PORT=${GATEWAY_HTTP_PORT:-8088}
-UNIT=efdi-tak-relay-$SYSTEM.service
-USER_UNIT_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
-CRON_LINE="@reboot cd \"$HERE\" && ./run.sh > /dev/null 2>&1"
 
 unit_text() {
     # unit_text <wanted-by> [user]: the systemd unit. A system unit runs as the installing user,
@@ -256,14 +254,8 @@ unit_text() {
     printf 'NoNewPrivileges=yes\n\n[Install]\nWantedBy=%s\n' "$1"
 }
 
-stop_running() {
-    # A relay of this folder started by an earlier install (crontab or by hand).
-    local pid args
-    while read -r pid args; do
-        case $args in *"$HERE/run.sh"* | *"$HERE/app/tak_gateway.py"*) kill "$pid" 2> /dev/null || true ;; esac
-    done < <(ps -eo pid=,args=)
-}
-
+# A start method of an earlier install is removed first, so only one relay starts for this folder.
+remove_autostart > /dev/null || true
 METHOD=none
 if [ "$AT_BOOT" = 1 ]; then
     T svc_system "$(id -un)"
@@ -278,15 +270,17 @@ if [ "$AT_BOOT" = 1 ]; then
 else
     if systemctl --user show-environment > /dev/null 2>&1; then
         T svc_user
-        mkdir -p "$USER_UNIT_DIR"
-        unit_text default.target > "$USER_UNIT_DIR/$UNIT"
+        mkdir -p "$(dirname "$USER_UNIT")"
+        unit_text default.target > "$USER_UNIT"
         if systemctl --user daemon-reload && systemctl --user enable "$UNIT" > /dev/null 2>&1; then
             METHOD=user
+            # Without lingering the user manager, and the relay, start only when the user signs in.
+            loginctl enable-linger "$(id -un)" > /dev/null 2>&1 || T linger_hint
         fi
     fi
     if [ "$METHOD" = none ] && command -v crontab > /dev/null 2>&1; then
         T cron_fallback
-        if { crontab -l 2> /dev/null | grep -vF "$HERE/run.sh" || true; echo "$CRON_LINE"; } | crontab - 2> /dev/null; then
+        if { crontab -l 2> /dev/null | grep -vF "$HERE/run.sh" || true; echo "@reboot cd \"$HERE\" && ./run.sh > /dev/null 2>&1"; } | crontab - 2> /dev/null; then
             METHOD=cron
         fi
     fi
@@ -295,7 +289,7 @@ fi
 
 # ---- 7. start now and check
 T starting_now
-stop_running
+stop_relay > /dev/null
 case $METHOD in
     system) sudo systemctl restart "$UNIT" ;;
     user) systemctl --user restart "$UNIT" ;;

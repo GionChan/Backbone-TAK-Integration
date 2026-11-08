@@ -153,7 +153,10 @@ Events from TCP clients connected to `:8087` are read as well.
 `<link relation="p-p">` to the device that made it; every such event is shared, hostile markers too
 (`a-h-*`, `b-m-p-*`, `u-d-*` and the rest). The allowlist applies to that device. A deletion
 (`t-x-d-d`) is published for markers this relay published, so the marker disappears from the other
-TAK devices as well; other deletions stay on the TAK network. At most 1 Hz per marker.
+TAK devices as well. It is accepted only from the address the marker was shared from, or from a
+device allowed to publish; other deletions stay on the TAK network. At most 1 Hz per marker: a
+quicker edit is held back and published one second later, so the last version always arrives.
+The relay does not send its own markers back to TAK when they return from the fabric.
 Other organisations' relays already forward `*/tak/cot/v1/**` to their TAK clients.
 
 **Messages are never shared.** GeoChat and every other `b-t-*` event stays on the TAK network,

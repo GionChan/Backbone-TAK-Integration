@@ -11,6 +11,9 @@
   and `doctor.py` show it.
 - Messages (GeoChat and every other `b-t-*`) are never published, whatever the settings.
 - `TAK_INGEST_UIDS=*` lets any device on the allowed links publish.
+- A deletion is accepted only from the address the marker was shared from, or from a device
+  allowed to publish. An edit over 1 Hz is published one second later instead of dropped. Markers
+  the relay published are not sent back to TAK when they return from the fabric.
 - A user-placed friendly marker (`a-f-*` with a creator link) is no longer published as the
   device's PLI; it is a marker and follows `TAK_SHARE_MARKERS`.
 - New drop reasons `chat`, `markers-off`, `pli-off`, `delete-unknown`; counters
@@ -22,7 +25,8 @@
   `run.sh` and `uninstall.sh`, messages in Finnish and English, and the dependency wheels for
   x86_64 and aarch64, so installing needs no network. The relay starts as a systemd user service,
   with `--at-boot` as a systemd service that runs as the installing user, or from crontab without
-  systemd. The package folder and `certs/` are 700, the key and `device.env` 600.
+  systemd. The package folder and `certs/` are 700, the key and `device.env` 600. Installing again
+  replaces the earlier start method; logs are kept per day for 14 days.
 - In direct mode the Linux installer also asks where CoT goes by UDP and which other devices may
   publish their position.
 - Releases carry a Linux template, `efdi-tak-relay-X.Y.Z-linux.tar.gz`, installed on Ubuntu before

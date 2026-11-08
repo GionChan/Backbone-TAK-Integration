@@ -95,13 +95,13 @@ python tools/make_relay_package.py --system field-relay-02 --platform linux   # 
 
 `.tar.gz`-paketissa on yksi kansio, jossa ovat `app/`, `certs/`, `device.env`, `install.sh`,
 `run.sh`, `uninstall.sh`, `common.sh`, `lang.txt` (kaikki viestit suomeksi ja englanniksi), ohjeet
-molemmilla kielillä sekä riippuvuuksien wheelit x86_64- ja aarch64-koneille (Python 3.10–3.13,
-noin 40 Mt). Valinnat ovat samat kuin Windows-paketissa; `--no-bundled-wheels` jättää wheelit
+molemmilla kielillä sekä riippuvuuksien wheelit x86_64- ja aarch64-koneille (Python 3.10–3.14,
+noin 50 Mt). Valinnat ovat samat kuin Windows-paketissa; `--no-bundled-wheels` jättää wheelit
 pois, jolloin laite tarvitsee verkkoyhteyden asennukseen. Skriptit ovat kansiossa
 `tools/field_package/linux/`.
 
-Laitteessa pitää olla glibc 2.28 tai uudempi (esim. Debian 10+, Ubuntu 20.04+ tai 64-bittinen
-Raspberry Pi OS), Python 3.10+ venv-moduulin kanssa (`sudo apt install python3 python3-venv`) ja
+Laitteessa pitää olla glibc 2.28 tai uudempi (esim. Debian 12+, Ubuntu 22.04+ tai
+64-bittinen Raspberry Pi OS 12+), Python 3.10+ venv-moduulin kanssa (`sudo apt install python3 python3-venv`) ja
 bash. Musl-pohjaisia järjestelmiä, kuten Alpinea, ei tueta.
 
 Asenna sillä käyttäjällä, joka ajaa relayta, ei pääkäyttäjänä:
@@ -118,7 +118,12 @@ lähtee UDP:llä (`TAK_UDP_TARGETS`) ja minkä muiden laitteiden oman sijainnin 
 julkaistaan vain tämän koneen TAK-sovellusten sijainnit.
 
 - `--at-boot`-palvelu ajetaan asentavana käyttäjänä, ei koskaan pääkäyttäjänä.
+- Käyttäjän palvelu käynnistyy koneen mukana, kun asennin saa kytkettyä lingeringin päälle
+  (`loginctl enable-linger`). Muuten asennin kertoo siitä, ja laitteelle, jolle kukaan ei
+  kirjaudu, käytetään valintaa `--at-boot`.
 - Jos käyttäjän systemd-istuntoa ei ole, asennin lisää käyttäjän crontabiin `@reboot`-rivin.
+- Uusi asennus korvaa aiemman käynnistystavan, joten kansiosta käynnistyy vain yksi relay.
+- Lokit kirjoitetaan päiväkohtaisiin tiedostoihin ja säilytetään 14 päivää.
 - Pakettikansion ja `certs/`-kansion oikeuksiksi asetetaan 700, avaimen, .p12-tiedostojen ja
   `device.env`-tiedoston 600.
 - `./run.sh --check-only` ajaa `doctor.py`-tarkistuksen, lokit ovat kansiossa `logs/`, ja

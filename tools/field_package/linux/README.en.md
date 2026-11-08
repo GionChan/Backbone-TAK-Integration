@@ -6,7 +6,7 @@ This package connects the device to the EFDI backbone and brings the backbone pi
 devices. The dependencies for x86_64 and aarch64 are included, so installing needs no network.
 The installer makes the relay start automatically.
 
-Needs: a Linux with glibc 2.28 or newer (e.g. Debian 10+, Ubuntu 20.04+, Raspberry Pi OS on 64-bit),
+Needs: a Linux with glibc 2.28 or newer (e.g. Debian 12+, Ubuntu 22.04+, 64-bit Raspberry Pi OS 12+),
 Python 3.10 or newer with the venv module (`sudo apt install python3 python3-venv`), bash.
 
 ## Before installing
