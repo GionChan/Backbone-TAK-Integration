@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.1 — 2026-11-08
+
+### Relay
+
+- Rate limiters forget idle keys oldest first (no rebuild of the whole table on the hot path) and
+  hold at most 50 000 keys.
+- `/streams` keeps a video preview only for MPEG-TS (sync byte and whole 188-byte packets), at most
+  4 MB per stream and 64 MB in all.
+
+### Deployment
+
+- The Docker image installs its Python packages from `relay/requirements.lock` with
+  `--require-hashes`: every package, dependencies too, is checked against its hash.
+
+### Documentation
+
+- Field-test checklist for real TAK devices, two relays and a Linux field device
+  (docs/*/field-test.md).
+
 ## 1.2.0 — 2026-11-05
 
 ### Relay

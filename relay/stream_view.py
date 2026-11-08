@@ -8,6 +8,9 @@ import threading
 import time
 
 MAX_GROUPS = 600
+# Video preview buffers (MPEG-TS): bytes kept per group and in all groups together.
+VIDEO_GROUP_BYTES = 4 * 1024 * 1024
+VIDEO_TOTAL_BYTES = 64 * 1024 * 1024
 IDLE_DROP_S = 900
 RATE_WINDOW_S = 10.0
 
@@ -47,6 +50,7 @@ class StreamStats:
         self.own_org = own_org
         self.lock = threading.Lock()
         self.g = {}
+        self.video_bytes = 0  # sum of every group's ring_bytes
         self.started = time.time()
 
     def record(self, key: str, size: int, head: bytes = b"", tak_sources=(), hint: str = "", now=None, payload=None):
@@ -66,8 +70,9 @@ class StreamStats:
             d["recent"].append((now, size))
             if payload is not None and size <= 200_000:
                 d["payload"] = payload
-                if hint == "video/binary" or head[:1] == bytes([0x47]):
-                    d.setdefault("ring", collections.deque(maxlen=4000)).append(payload)
+                # MPEG-TS: sync byte 0x47 and whole 188-byte packets (not any payload starting with "G").
+                if hint == "video/binary" or (head[:1] == bytes([0x47]) and size % 188 == 0):
+                    self._keep_video(d, payload)
             if head:
                 d["kind"] = kind_of(head, hint)
                 if d["kind"] in ("json", "xml") and (not d["sample"] or d["n"] % 50 == 1):
@@ -76,6 +81,17 @@ class StreamStats:
                 d["kind"] = hint
             for s in tak_sources:
                 d["tak"][s] += 1
+
+    def _keep_video(self, d: dict, payload: bytes) -> None:
+        """Append to the group's video ring within VIDEO_GROUP_BYTES and VIDEO_TOTAL_BYTES."""
+        ring = d.setdefault("ring", collections.deque())
+        ring.append(payload)
+        d["ring_bytes"] = d.get("ring_bytes", 0) + len(payload)
+        self.video_bytes += len(payload)
+        while ring and (d["ring_bytes"] > VIDEO_GROUP_BYTES or self.video_bytes > VIDEO_TOTAL_BYTES):
+            old = ring.popleft()
+            d["ring_bytes"] -= len(old)
+            self.video_bytes -= len(old)
 
     def sample(self, group: str):
         """(last payload bytes, kind) for a group, or (None, None)."""
@@ -94,6 +110,7 @@ class StreamStats:
         rows = []
         with self.lock:
             for name in [k for k, d in self.g.items() if now - d["last"] > IDLE_DROP_S]:
+                self.video_bytes -= self.g[name].get("ring_bytes", 0)
                 del self.g[name]
             for name, d in self.g.items():
                 recent = [(t, s) for t, s in d["recent"] if now - t <= RATE_WINDOW_S]

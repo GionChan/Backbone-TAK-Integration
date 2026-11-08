@@ -23,8 +23,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl ca-
     && rm /tmp/mediamtx.tar.gz
 
 WORKDIR /opt/tak
-COPY relay/requirements.txt relay/requirements.txt
-RUN pip install --no-cache-dir -r relay/requirements.txt
+COPY relay/requirements.txt relay/requirements.lock relay/
+# Every package, dependencies too, checked against the hashes in the lock file.
+RUN pip install --no-cache-dir --require-hashes -r relay/requirements.lock
 COPY relay/ relay/
 
 # Unprivileged runtime user. The mounted key must be readable by it (Docker Desktop bind

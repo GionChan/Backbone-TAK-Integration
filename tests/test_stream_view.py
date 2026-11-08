@@ -47,6 +47,18 @@ class StreamViewTests(unittest.TestCase):
         self.assertEqual(st.snapshot(now=2)["groups"], sv.MAX_GROUPS)
 
 
+class VideoBufferTests(unittest.TestCase):
+    def test_only_ts_packets_and_bounded(self):
+        st = sv.StreamStats(ORG)
+        st.record("o/s/notvideo/x", 1000, b"GET /x", payload=b"G" * 1000, now=1)   # starts with G, not TS
+        self.assertIsNone(st.video("o/s/notvideo"))
+        pkt = b"G" + b"\x00" * 187 * 1 + b"G" + b"\x00" * 187        # two TS packets
+        for i in range(30000):                                              # ~11 MB
+            st.record("o/s/cam/x", len(pkt), pkt[:4], payload=pkt, now=2)
+        self.assertLessEqual(len(st.video("o/s/cam")), sv.VIDEO_GROUP_BYTES)
+        self.assertLessEqual(st.video_bytes, sv.VIDEO_TOTAL_BYTES)
+
+
 try:
     import PIL  # noqa: F401  optional dependency (relay/requirements.txt)
     HAVE_PIL = True
