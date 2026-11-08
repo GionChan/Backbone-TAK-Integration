@@ -65,6 +65,8 @@ versionhallinnan ulkopuolelle.
      Käynnistys-kansion pikakuvaketta.
    - Kioskikoneet ilman kirjautunutta käyttäjää: `install.ps1 -AtSystemStartup`
      ylläpitäjän PowerShellissä (käynnistyy järjestelmän mukana SYSTEM-tilillä).
+   - Asennin rajaa kansion asentavalle käyttäjälle, SYSTEMille ja järjestelmänvalvojille, joten
+     koneen muut käyttäjät eivät voi lukea avainta eivätkä muuttaa skriptejä, joita SYSTEM ajaa.
 3. Vain suorassa tilassa: ohjaa päätteen CoT-tulo `device.env`-tiedoston porttiin `TAK_UDP_PORT`
    (oletus 6969) ja tarvittaessa sen UDP-ulostulo porttiin `TAK_UDP_IN_PORT` PLI:tä
    varten. Lähiverkko- ja TAK Server -tiloissa TAKiin ei aseteta mitään.

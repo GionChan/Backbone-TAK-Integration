@@ -91,6 +91,8 @@ services:
     environment:
       <<: *fabric-env
       GOAT_MAP_PORT: "8080"
+      # Needed to inject tracks on the real fabric (the demo launcher makes one).
+      LIVE_MAP_TOKEN: ${LIVE_MAP_TOKEN:-}
     ports:
       - "8080:8080"       # map; /control = scenario panel
     restart: unless-stopped

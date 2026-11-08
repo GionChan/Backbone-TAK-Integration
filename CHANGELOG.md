@@ -35,9 +35,16 @@
 ### Demo
 
 - `demo/run-backbone-demo.sh` and `demo/setup-certs.sh` for Linux and macOS.
+- On the real fabric the live map's `/inject` needs `LIVE_MAP_TOKEN` (the control panel opened as
+  `/control?token=...`), and the edge-AI API refuses to start without `EDGE_API_TOKEN`. The
+  launchers make both tokens and print the control panel address.
 
 ### Deployment
 
+- GitHub Actions are pinned to commit SHAs, updated by Dependabot; `.github/CODEOWNERS` covers
+  the workflows, the relay, the tools and the agent instructions.
+- Windows installer: the folder is limited to the installing user, SYSTEM and Administrators, so
+  another user can neither read the key nor change what the `-AtSystemStartup` task runs.
 - Compose maps `host.docker.internal` to the Docker host, so the default UDP target works with
   Docker Engine on Linux too.
 

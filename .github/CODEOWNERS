@@ -1,0 +1,9 @@
+# Changes here reach every device or every agent working on the repo: they need the owner's review.
+# Takes effect when branch protection on main requires review from code owners.
+/.github/          @GionChan
+/AGENTS.md         @GionChan
+/CLAUDE.md         @GionChan
+/Dockerfile        @GionChan
+/docker-compose*.yml @GionChan
+/relay/            @GionChan
+/tools/            @GionChan

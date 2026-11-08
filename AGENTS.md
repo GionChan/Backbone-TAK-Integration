@@ -141,6 +141,8 @@ __version__, docker-compose image tag and the newest CHANGELOG section must agre
   shared network: do not run them without the user's explicit consent.
 - No infrastructure addresses in the repo (router names, mesh IPs, internal hosts): the router
   comes from the bundle's NOTES.md or GOAT_ROUTER; goat_connect exits when neither names one.
+- Actions are pinned to commit SHAs with the version in a comment; Dependabot updates them.
+  Never go back to a bare tag (@v4).
 - Docs and user-visible text name no events, places, people or national TAK variants; use
   WinTAK, ATAK or "TAK app". Vendor format names appear only in the "Recognised formats" table
   of docs/*/relay.md and in variable names (GATEWAY_SOURCES, GATEWAY_HYMOTS_INTERVAL_S).

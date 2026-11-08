@@ -114,12 +114,15 @@ class H(BaseHTTPRequestHandler):
 
     # ---- POST ----
     def do_POST(self):
+        # Read the body before any answer: closing with unread data can reset the connection.
+        try:
+            body = self.rfile.read(min(int(self.headers.get("Content-Length", "0")), 1 << 20))
+        except ValueError:
+            body = b""
         if not _authed(self):
             return self._json(401, {"error": "unauthorized"})
         if not self.path.startswith("/detections/cot"):
             return self._json(404, {"error": "not found"})
-        n = int(self.headers.get("Content-Length", "0"))
-        body = self.rfile.read(n)
         ctype = self.headers.get("Content-Type", "").split(";")[0].strip()
         try:
             if ctype == "application/xml" or body.lstrip().startswith(b"<"):
@@ -151,6 +154,9 @@ def _offer(q: queue.Queue, item: bytes):
 
 
 def main():
+    if _REAL and not TOKEN:
+        # On the real fabric POST /detections/cot publishes under the org's identity.
+        raise SystemExit("[api-gw] refusing to start on the real fabric without EDGE_API_TOKEN")
     print(f"[api-gw] fabric={'efdi-mtls' if _REAL else 'local'}  "
           f"listen http://{HOST}:{PORT}  auth={'on' if TOKEN else 'off'}", flush=True)
     print(f"[api-gw]   GET  /intake/frames | /intake/telemetry  (SSE)", flush=True)

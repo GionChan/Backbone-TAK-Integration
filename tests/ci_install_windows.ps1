@@ -90,6 +90,11 @@ function Test-Install([string]$Name, [string]$System, [string[]]$Answers, [hasht
             (@(Get-ChildItem ([IO.Path]::GetTempPath()) -Filter "efdi-bundle-*" -ErrorAction SilentlyContinue).Count -eq 0)
     }
 
+    # Folder limited to the installing user, SYSTEM and Administrators; the key readable by the user.
+    $open = @((Get-Acl $pkg).Access + (Get-Acl (Get-ChildItem (Join-Path $pkg "certs") -Filter "*.pem" | Select-Object -First 1).FullName).Access |
+        Where-Object { $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -in @("S-1-1-0", "S-1-5-11", "S-1-5-32-545") })
+    Check "$Name / no access for Everyone, Authenticated Users or Users" ($open.Count -eq 0) "$($open.IdentityReference -join ', ')"
+    Check "$Name / prints the permissions line" ($out -like "*Folder limited*" -or $out -like "*Kansio rajattu*")
     $status = Get-Status 8088 120
     Check "$Name / relay answers on :8088" ($null -ne $status)
     if ($status) {

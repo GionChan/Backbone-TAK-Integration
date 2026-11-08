@@ -229,6 +229,17 @@ if ($Mode -eq "multicast") {
 . (Join-Path $here "bootstrap.ps1")
 Write-Host (T "deps_ok") -ForegroundColor Green
 
+# ---- permissions: the folder holds the org's private key, device.env may hold a password, and with
+# -AtSystemStartup SYSTEM runs its scripts. Only this user, SYSTEM and Administrators keep access,
+# so another user can neither read the key nor change what runs (SIDs: the same in every language).
+$me = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+# The folder gets the three grants; everything in it is reset to inherit them. (Granting with /T
+# would leave files with no access at all: the (OI)(CI) flags do not apply to files.)
+icacls $here /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" "*${me}:(OI)(CI)F" /C /Q > $null 2>&1
+$aclOk = ($LASTEXITCODE -eq 0)
+icacls (Join-Path $here "*") /reset /T /C /Q > $null 2>&1
+if ($aclOk -and $LASTEXITCODE -eq 0) { Write-Host (T "perms") -ForegroundColor Green } else { Write-Host (T "perms_failed") -ForegroundColor Yellow }
+
 # ---- 5. automatic start
 $system = if ($env:GATEWAY_SYSTEM) { $env:GATEWAY_SYSTEM } else { "tak-relay" }
 $httpPort = if ($env:GATEWAY_HTTP_PORT) { $env:GATEWAY_HTTP_PORT } else { "8088" }
