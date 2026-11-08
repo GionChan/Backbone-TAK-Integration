@@ -157,8 +157,11 @@ omia tyyppejä ei julkaista PLI:nä.
 `<link relation="p-p">` sen tehneeseen laitteeseen. Jokainen tällainen tapahtuma jaetaan, myös
 vihollismerkit (`a-h-*`, `b-m-p-*`, `u-d-*` ja muut). Sallittujen lista koskee merkin tehnyttä
 laitetta. Poisto (`t-x-d-d`) julkaistaan niille merkeille, jotka tämä relay on julkaissut, joten
-merkki katoaa myös muista TAK-laitteista; muut poistot pysyvät TAK-verkossa. Enintään yksi
-päivitys sekunnissa merkkiä kohden. Muiden organisaatioiden relayt välittävät jo nyt avaimen
+merkki katoaa myös muista TAK-laitteista. Poisto hyväksytään vain osoitteesta, josta merkki
+jaettiin, tai laitteelta, joka saa julkaista; muut poistot pysyvät TAK-verkossa. Enintään yksi
+päivitys sekunnissa merkkiä kohden: nopeampi muokkaus pidätetään ja julkaistaan sekunnin
+kuluttua, joten viimeisin versio menee aina perille. Relay ei lähetä omia merkkejään takaisin
+TAKiin, kun ne palaavat fabricista. Muiden organisaatioiden relayt välittävät jo nyt avaimen
 `*/tak/cot/v1/**` TAK-asiakkailleen.
 
 **Viestejä ei jaeta koskaan.** GeoChat ja kaikki muut `b-t-*`-tapahtumat pysyvät TAK-verkossa

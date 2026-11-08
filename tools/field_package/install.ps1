@@ -177,6 +177,16 @@ if ($Mode -notin @("direct", "multicast", "server")) {
 Set-EnvValue "TAK_MODE" $Mode
 Write-Host (T "mode_set" (T "mode_$Mode")) -ForegroundColor Green
 
+# ---- sharing markers and drawings (off or on; device.env keeps the answer)
+if ($env:TAK_SHARE_MARKERS -notin @("0", "1")) {
+    Write-Host ""
+    Write-Host (T "share_title")
+    Write-Host (T "share_1")
+    Write-Host (T "share_2")
+    Set-EnvValue "TAK_SHARE_MARKERS" (@{ "1" = "0"; "2" = "1" }[(Read-Choice @("1", "2"))])
+}
+Write-Host (T "share_set_$($env:TAK_SHARE_MARKERS)") -ForegroundColor Green
+
 # ---- questions for the mode
 if ($Mode -eq "server") {
     Write-Host (T "srv_hint")
@@ -209,21 +219,11 @@ if ($Mode -eq "server") {
 }
 if ($Mode -eq "multicast") {
     Write-Host (T "mc_warning") -ForegroundColor Yellow
-    if ($env:TAK_INGEST -eq "1" -and -not $env:TAK_INGEST_UIDS) {
+    if (($env:TAK_INGEST -eq "1" -or $env:TAK_SHARE_MARKERS -eq "1") -and -not $env:TAK_INGEST_UIDS) {
         $uids = Read-Value (T "mc_uids")
         if ($uids) { Set-EnvValue "TAK_INGEST_UIDS" $uids }
     }
 }
-
-# ---- sharing markers and drawings (off or on; device.env keeps the answer)
-if ($env:TAK_SHARE_MARKERS -notin @("0", "1")) {
-    Write-Host ""
-    Write-Host (T "share_title")
-    Write-Host (T "share_1")
-    Write-Host (T "share_2")
-    Set-EnvValue "TAK_SHARE_MARKERS" (@{ "1" = "0"; "2" = "1" }[(Read-Choice @("1", "2"))])
-}
-Write-Host (T "share_set_$($env:TAK_SHARE_MARKERS)") -ForegroundColor Green
 
 # ---- 4. dependencies
 . (Join-Path $here "bootstrap.ps1")

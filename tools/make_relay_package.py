@@ -6,7 +6,8 @@ from tools/field_package/ (install.cmd/.ps1, uninstall, run, bootstrap, lang), t
 Python and READMEs in Finnish and English.
 Linux (--platform linux): a .tar.gz with the same app/ and certs/, the installer from
 tools/field_package/linux/ (install.sh, uninstall.sh, run.sh, common.sh, lang.txt) and the
-dependency wheels for x86_64 and aarch64. On the device: tar -xzf, ./install.sh. On the device: unzip, double-click install.cmd. The installer asks for the
+dependency wheels for x86_64 and aarch64. On the device: tar -xzf, ./install.sh.
+Windows device: unzip, double-click install.cmd. The installer asks for the
 language (fi/en), then the mode (direct / local network / TAK Server) and the mode's details,
 installs the dependencies, registers automatic start and starts the relay. Anything given here
 (--lang, --mode, --tak-server ...) is written to device.env and not asked again.
@@ -85,7 +86,7 @@ LINUX_README_FI, LINUX_README_EN = _template("linux/README.fi.md"), _template("l
 # Wheels for these machines and Python versions: eclipse-zenoh and cryptography are abi3, cffi is
 # per Python version. manylinux needs glibc 2.17 (zenoh) / 2.28 (cryptography).
 LINUX_ARCHES = ("x86_64", "aarch64")
-LINUX_PYTHONS = ("3.10", "3.11", "3.12", "3.13")
+LINUX_PYTHONS = ("3.10", "3.11", "3.12", "3.13", "3.14")
 
 # Bundled Python (Windows amd64): the device needs no Python and no network at install.
 # The embeddable zip is pinned to the SHA256 python.org publishes for it; the wheels come from
@@ -348,7 +349,7 @@ def build_package(system, cert_dir, out: str, tak_host: str, tak_udp_port: int,
     else:
         for name, content in zip(PS1_FILES, (LANG_PS1, BOOTSTRAP_PS1, RUN_PS1, INSTALL_PS1, UNINSTALL_PS1)):
             # UTF-8 BOM and CRLF: Windows PowerShell 5.1 reads the Finnish letters correctly.
-            add(name, "﻿" + content.replace("\r\n", "\n").replace("\n", "\r\n"))
+            add(name, "\ufeff" + content.replace("\r\n", "\n").replace("\n", "\r\n"))
         add("install.cmd", INSTALL_CMD)
         add("uninstall.cmd", UNINSTALL_CMD)
         add("README.fi.md", README_FI.format(**fmt))

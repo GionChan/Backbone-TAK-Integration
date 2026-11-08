@@ -91,11 +91,11 @@ python tools/make_relay_package.py --system field-relay-02 --platform linux   # 
 
 The `.tar.gz` holds one folder with `app/`, `certs/`, `device.env`, `install.sh`, `run.sh`,
 `uninstall.sh`, `common.sh`, `lang.txt` (all messages in Finnish and English), READMEs in both
-languages and the dependency wheels for x86_64 and aarch64 (Python 3.10–3.13, about 40 MB). The
+languages and the dependency wheels for x86_64 and aarch64 (Python 3.10–3.14, about 50 MB). The
 options are those of the Windows package; `--no-bundled-wheels` leaves the wheels out, and the
 device then needs network at install. The scripts live in `tools/field_package/linux/`.
 
-The device needs glibc 2.28 or newer (e.g. Debian 10+, Ubuntu 20.04+, 64-bit Raspberry Pi OS),
+The device needs glibc 2.28 or newer (e.g. Debian 12+, Ubuntu 22.04+, 64-bit Raspberry Pi OS 12+),
 Python 3.10+ with the venv module (`sudo apt install python3 python3-venv`) and bash. Musl-based
 systems such as Alpine are not supported.
 
@@ -113,7 +113,12 @@ UDP (`TAK_UDP_TARGETS`) and which other devices may publish their own position
 TAK apps on this machine are published.
 
 - The `--at-boot` service runs as the installing user, never as root.
+- The user service starts with the machine when the installer can enable lingering
+  (`loginctl enable-linger`); otherwise it says so, and `--at-boot` is the way for a device nobody
+  signs in to.
 - Without a systemd user session the installer adds an `@reboot` line to the user's crontab.
+- Installing again replaces the earlier start method, so only one relay starts for the folder.
+- Logs are written per day and kept 14 days.
 - The package folder and `certs/` are made 700, the key, the .p12 files and `device.env` 600.
 - `./run.sh --check-only` runs `doctor.py`; logs are in `logs/`; `./uninstall.sh` removes the
   automatic start and stops the relay.

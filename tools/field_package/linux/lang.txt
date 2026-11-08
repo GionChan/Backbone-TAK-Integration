@@ -52,6 +52,7 @@ fi|svc_system|==> Asennetaan systemd-palvelu, joka käynnistyy koneen mukana kä
 fi|svc_failed|systemd-palvelun asennus epäonnistui.
 fi|cron_fallback|==> systemd-käyttäjäpalvelua ei voi käyttää. Käytetään crontabin @reboot-riviä (käynnistyy koneen mukana).
 fi|no_autostart|Automaattista käynnistystä ei voitu asentaa (ei systemd:tä eikä crontabia). Käynnistä relay itse: ./run.sh
+fi|linger_hint|Huom: relay käynnistyy vasta, kun kirjaudut sisään. Koneen mukana käynnistykseen: sudo loginctl enable-linger $USER tai ./install.sh --at-boot
 fi|starting_now|==> Käynnistetään relay nyt...
 fi|waiting|==> Odotetaan relayn käynnistymistä...
 fi|healthy|==> Relay on käynnissä ja kunnossa.
@@ -129,6 +130,7 @@ en|svc_system|==> Installing a systemd service that starts with the machine, as 
 en|svc_failed|Installing the systemd service failed.
 en|cron_fallback|==> A systemd user service cannot be used. Using an @reboot line in crontab (starts with the machine).
 en|no_autostart|Automatic start could not be installed (no systemd and no crontab). Start the relay yourself: ./run.sh
+en|linger_hint|Note: the relay starts only when you sign in. To start it with the machine: sudo loginctl enable-linger $USER, or ./install.sh --at-boot
 en|starting_now|==> Starting the relay now...
 en|waiting|==> Waiting for the relay to start...
 en|healthy|==> The relay is running and healthy.

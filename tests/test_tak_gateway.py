@@ -167,7 +167,8 @@ class IngestTests(unittest.TestCase):
 
     def _sharing(self, on=True, uids=frozenset(), any_device=False):
         for name, value in (("SHARE_MARKERS", on), ("INGEST_UIDS", uids), ("ANY_DEVICE", any_device),
-                            ("_marker_limiter", cot_guard.RateLimiter(1.0)), ("_published_markers", {})):
+                            ("_marker_limiter", cot_guard.RateLimiter(1.0)), ("_published_markers", {}),
+                            ("_deleted_markers", {}), ("_pending_markers", {})):
             p = mock.patch.object(gw, name, value)
             p.start()
             self.addCleanup(p.stop)
@@ -239,6 +240,64 @@ class IngestTests(unittest.TestCase):
         gw.ingest_event(gw.OUTPUTS[0].sent[0], "udp_in@127.0.0.1")   # a TAK app shares it back, tag kept
         gw.ingest_event(event, "udp_in@127.0.0.1")           # or untagged
         self.assertEqual(self._published(), [])
+
+    @staticmethod
+    def _delete(target, sender=None):
+        ev = bc.make_cot(f"del-{target}", "t-x-d-d", 0, 0)
+        links = f'<link uid="{sender}" relation="p-p" type="a-f-G-U-C"/>' if sender else ""
+        links += f'<link uid="{target}" relation="none" type="a-h-G"/><__forcedelete/>'
+        return ev.replace(b"<detail>", f"<detail>{links}".encode(), 1)
+
+    def test_stranger_on_the_lan_cannot_delete(self):
+        self._sharing(uids=frozenset({"ANDROID-own1"}))
+        with mock.patch.object(gw, "INGEST_FROM", frozenset({"local", "lan"})):
+            gw.ingest_event(self._marker("m-1", creator="ANDROID-own1"), "multicast@10.0.0.5", "lan")
+            gw.ingest_event(self._delete("m-1"), "multicast@10.0.0.66", "lan")              # stranger
+            gw.ingest_event(self._delete("m-1", sender="ANDROID-x"), "multicast@10.0.0.66", "lan")
+            self.assertEqual(len(self._published()), 1)
+            self.assertEqual(gw.COUNTERS['gateway_ingest_dropped_total{reason="not-allowed"}'], 2)
+            gw.ingest_event(self._delete("m-1"), "multicast@10.0.0.5", "lan")               # its source
+        self.assertEqual(len(self._published()), 2)
+
+    def test_delete_target_is_not_the_senders_link(self):
+        self._sharing()
+        gw.ingest_event(self._marker("m-1"), "udp_in@127.0.0.1")
+        gw.ingest_event(self._delete("m-1", sender="ANDROID-own1"), "udp_in@127.0.0.1")
+        self.assertEqual(self._published(), [f"{gw.gc.ORG}/tak/cot/v1/m-1"] * 2)
+
+    def test_echo_guard_without_pli(self):
+        self._sharing()
+        gw.INGEST[0] = False
+        gw.OUTPUTS[:] = [_Capture()]
+        event = self._marker("vendor-z.mark-2", creator="vendor-z", now=1_800_000_000)
+        gw.dispatch(event)
+        gw.ingest_event(event, "udp_in@127.0.0.1")        # a TAK app sends it back untagged
+        self.assertEqual(self._published(), [])
+        self.assertEqual(gw.COUNTERS['gateway_ingest_dropped_total{reason="echo"}'], 1)
+
+    def test_own_marker_is_not_sent_back_to_tak(self):
+        self._sharing()
+        gw.OUTPUTS[:] = [_Capture()]
+        ours = self._marker("m-1")
+        gw.ingest_event(ours, "udp_in@127.0.0.1")
+        gw.dispatch(ours)                                  # our own put, back from the fabric
+        gw.ingest_event(self._delete("m-1"), "udp_in@127.0.0.1")
+        gw.dispatch(self._delete("m-1"))                   # our own deletion, back
+        gw.dispatch(self._marker("other-org-1", creator="X"))
+        self.assertEqual(len(gw.OUTPUTS[0].sent), 1)
+        self.assertEqual(gw.COUNTERS['gateway_cot_dropped_total{reason="own-marker"}'], 2)
+
+    def test_last_quick_edit_is_published(self):
+        self._sharing()
+        first = self._marker("m-1", now=time.time())
+        last = self._marker("m-1", now=time.time() + 0.1).replace(b'lat="60.2', b'lat="61.5', 1)
+        gw.ingest_event(first, "udp_in@127.0.0.1")
+        gw.ingest_event(last, "udp_in@127.0.0.1")         # within the rate limit: held back
+        self.assertEqual(len(self._published()), 1)
+        deadline = time.time() + 5
+        while len(self._published()) < 2 and time.time() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(self.session.put.call_args_list[-1].args[1], last)
 
     def test_tcp_client_link_reads_as_server(self):
         a, b = socket.socketpair()

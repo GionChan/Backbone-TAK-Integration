@@ -6,8 +6,8 @@ Tämä paketti yhdistää laitteen EFDI-backboneen ja tuo backbonen tilannekuvan
 Riippuvuudet x86_64- ja aarch64-koneille ovat mukana, joten asennus ei tarvitse verkkoyhteyttä.
 Asennin asettaa relayn käynnistymään automaattisesti.
 
-Tarvitaan: Linux, jossa on glibc 2.28 tai uudempi (esim. Debian 10+, Ubuntu 20.04+ tai 64-bittinen
-Raspberry Pi OS), Python 3.10 tai uudempi venv-moduulin kanssa (`sudo apt install python3
+Tarvitaan: Linux, jossa on glibc 2.28 tai uudempi (esim. Debian 12+, Ubuntu 22.04+ tai
+64-bittinen Raspberry Pi OS 12+), Python 3.10 tai uudempi venv-moduulin kanssa (`sudo apt install python3
 python3-venv`) sekä bash.
 
 ## Ennen asennusta

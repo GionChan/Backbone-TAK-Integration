@@ -101,7 +101,12 @@ ANY_DEVICE = "*" in INGEST_UIDS                       # "*" = any device on the 
 # Markers and drawings made on TAK devices -> <org>/tak/cot/v1/<uid>. Off unless set to 1.
 SHARE_MARKERS = os.environ.get("TAK_SHARE_MARKERS", "0") == "1"
 _marker_limiter = cot_guard.RateLimiter(1.0)
-_published_markers: dict = {}  # marker uid -> when published (oldest first, bounded): deletions
+_MARKER_LIMIT = 10000
+# marker uid -> source address it was shared from (oldest first, bounded): who may delete it, and
+# which markers coming back from the fabric are our own.
+_published_markers: dict = {}
+_deleted_markers: dict = {}    # marker uid -> when we published its deletion (our own, coming back)
+_pending_markers: dict = {}    # marker uid -> latest event held back by the rate limit
 _published_lock = threading.Lock()
 _CONFIG_ERRORS = []  # reported by main(), like _MODE_ERROR, so the module stays importable
 
@@ -303,7 +308,31 @@ def _publish(key: str, ev: bytes, counter: str) -> bool:
         return False
 
 
-def _ingest_marker(root, ev: bytes, uid: str, creator: str, kind: str) -> None:
+def _remember(table: dict, key: str, value) -> None:
+    """table[key] = value as the newest entry, at most _MARKER_LIMIT entries. Caller holds the lock."""
+    table.pop(key, None)
+    table[key] = value
+    while len(table) > _MARKER_LIMIT:
+        table.pop(next(iter(table)))
+
+
+def _publish_marker(uid: str, ev: bytes, source: str) -> None:
+    if _publish(f"{gc.ORG}/tak/cot/v1/{_safe_key(uid)}", ev, "gateway_markers_published_total"):
+        with _published_lock:
+            _remember(_published_markers, uid, source)
+            _deleted_markers.pop(uid, None)
+
+
+def _flush_marker(uid: str) -> None:
+    """Publish the latest held-back version of a marker, so the last edit of a quick series is
+    never lost (markers are not re-sent by TAK apps the way positions are)."""
+    with _published_lock:
+        held = _pending_markers.pop(uid, None)
+    if held is not None:
+        _publish_marker(uid, *held)
+
+
+def _ingest_marker(root, ev: bytes, uid: str, creator: str, kind: str, origin: str) -> None:
     """A marker or drawing made on a TAK device -> <org>/tak/cot/v1/<uid> (TAK_SHARE_MARKERS=1)."""
     if not SHARE_MARKERS:
         inc('gateway_ingest_dropped_total{reason="markers-off"}')
@@ -314,29 +343,64 @@ def _ingest_marker(root, ev: bytes, uid: str, creator: str, kind: str) -> None:
     if _recently_forwarded(uid, root.get("time", "")):
         inc('gateway_ingest_dropped_total{reason="echo"}')
         return
-    if not _marker_limiter.allow(uid):
-        inc('gateway_ingest_dropped_total{reason="rate-limited"}')
+    source = _origin_ip(origin)
+    if _marker_limiter.allow(uid):
+        _publish_marker(uid, ev, source)
         return
-    if _publish(f"{gc.ORG}/tak/cot/v1/{_safe_key(uid)}", ev, "gateway_markers_published_total"):
-        with _published_lock:
-            _published_markers.pop(uid, None)
-            _published_markers[uid] = time.time()
-            while len(_published_markers) > 10000:
-                _published_markers.pop(next(iter(_published_markers)))
-
-
-def _ingest_delete(root, ev: bytes) -> None:
-    """A deletion (t-x-d-d) of a marker this relay published goes to that marker's key, so the
-    marker disappears from the other TAK devices too. Other deletions stay on the TAK network."""
-    target = next((link.get("uid") for link in root.iter("link") if link.get("uid")), "")
+    # Over 1 Hz: keep the latest version and publish it one second later.
     with _published_lock:
-        known = SHARE_MARKERS and target in _published_markers
-    if not known:
+        first = uid not in _pending_markers
+        if first and len(_pending_markers) >= _MARKER_LIMIT:
+            inc('gateway_ingest_dropped_total{reason="rate-limited"}')
+            return
+        _pending_markers[uid] = (ev, source)
+    inc('gateway_ingest_deferred_total')
+    if first:
+        t = threading.Timer(1.0, _flush_marker, args=(uid,))
+        t.daemon = True
+        t.start()
+
+
+def _ingest_delete(root, ev: bytes, origin: str, kind: str) -> None:
+    """A deletion (t-x-d-d) of a marker this relay published goes to that marker's key, so the
+    marker disappears from the other TAK devices too. It is accepted only from the address the
+    marker was shared from, or from a device allowed to publish; other deletions stay on TAK."""
+    links = [link for link in root.iter("link") if link.get("uid")]
+    target = next((link.get("uid") for link in links if link.get("relation") != "p-p"), "")
+    with _published_lock:
+        source = _published_markers.get(target) if SHARE_MARKERS else None
+    if source is None:
         inc('gateway_ingest_dropped_total{reason="delete-unknown"}')
         return
+    sender = _creator(root)
+    if _origin_ip(origin) != source and not (sender and _allowed(sender, kind)):
+        inc('gateway_ingest_dropped_total{reason="not-allowed"}')
+        return
+    with _published_lock:
+        _pending_markers.pop(target, None)  # a held-back edit must not re-create the marker
     if _publish(f"{gc.ORG}/tak/cot/v1/{_safe_key(target)}", ev, "gateway_marker_deletes_published_total"):
         with _published_lock:
             _published_markers.pop(target, None)
+            _remember(_deleted_markers, target, time.time())
+
+
+def _own_marker(data: bytes) -> bool:
+    """True for a marker (or its deletion) this relay published, coming back from the fabric. It is
+    already on the TAK devices; sent back it would carry the relay tag, and the next edit of it
+    would then be dropped as "relayed"."""
+    if not (SHARE_MARKERS and (_published_markers or _deleted_markers)):
+        return False
+    try:
+        root = ET.fromstring(data.strip().split(b"?>", 1)[-1] if data.lstrip().startswith(b"<?") else data.strip())
+    except ET.ParseError:
+        return False
+    uid = root.get("uid", "")
+    if root.get("type") == "t-x-d-d":
+        uid = next((link.get("uid") for link in root.iter("link")
+                    if link.get("uid") and link.get("relation") != "p-p"), uid)
+    with _published_lock:
+        deleted = _deleted_markers.get(uid)
+        return uid in _published_markers or (deleted is not None and time.time() - deleted < _ECHO_S)
 
 
 def ingest_event(ev: bytes, origin: str, kind: str = "local") -> None:
@@ -372,11 +436,11 @@ def ingest_event(ev: bytes, origin: str, kind: str = "local") -> None:
         inc('gateway_ingest_dropped_total{reason="chat"}')
         return
     if typ == "t-x-d-d":
-        _ingest_delete(root, ev)
+        _ingest_delete(root, ev, origin, kind)
         return
     creator = _creator(root)
     if creator and not typ.startswith("t-"):
-        _ingest_marker(root, ev, uid, creator, kind)
+        _ingest_marker(root, ev, uid, creator, kind, origin)
         return
     if not INGEST[0]:
         inc('gateway_ingest_dropped_total{reason="pli-off"}')
@@ -750,7 +814,10 @@ def load_config() -> dict:
 
 # ---------------------------------------------------------------- dispatch + subscriptions
 def dispatch(data: bytes) -> None:
-    if INGEST[0]:
+    if _own_marker(data):
+        inc('gateway_cot_dropped_total{reason="own-marker"}')
+        return
+    if INGEST[0] or SHARE_MARKERS:
         _remember_forwarded(data)
     data = tag(data)
     for o in OUTPUTS:
@@ -997,7 +1064,7 @@ def main() -> None:
 
     if UDP_IN_PORT:
         start_udp_input(UDP_IN_PORT)
-    if MODE == "multicast" and INGEST[0]:
+    if MODE == "multicast" and (INGEST[0] or SHARE_MARKERS):
         if not INGEST_UIDS:
             log("WARNING: TAK_MODE=multicast hears every TAK user on the LAN; nobody is published "
                 "until TAK_INGEST_UIDS names your devices")
